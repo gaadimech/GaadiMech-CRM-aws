@@ -6,6 +6,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import re
 import os
 from dotenv import load_dotenv
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address   
 
 load_dotenv()
 
@@ -14,8 +16,19 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    storage_uri="memory://"
+)
+
 if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
     app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://')
+
+db = SQLAlchemy(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -55,6 +68,7 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
@@ -101,6 +115,7 @@ def index():
 
 @app.route('/add_lead', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute")
 def add_lead():
     customer_name = request.form.get('customer_name')  # Updated from 'user'
     mobile = request.form.get('mobile')
