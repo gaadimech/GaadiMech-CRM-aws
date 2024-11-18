@@ -17,8 +17,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 limiter = Limiter(
-    app=app,
     key_func=get_remote_address,
+    app=app,
     storage_uri="memory://"
 )
 
@@ -32,12 +32,6 @@ login_manager.login_view = 'login'
 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-
-limiter = Limiter(
-    app,
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
-)
 
 # Database Models
 class User(UserMixin, db.Model):
