@@ -1,2 +1,10 @@
-certifi==2024.8.30
-wheel @ file:///usr/local/Cellar/python%403.12/3.12.5/libexec/wheel-0.44.0-py3-none-any.whl#sha256=8d8a590e50bda8422000110e90bc730ebfcd8363d2de80793ac819b7f252e97d
+Flask==2.3.3
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.2
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+gunicorn==21.2.0
+Werkzeug==2.3.7
+Flask-Limiter==3.5.0
+limits==3.6.0
+SQLAlchemy==2.0.23
