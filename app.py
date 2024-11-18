@@ -70,6 +70,9 @@ def load_user(user_id):
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
 def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
@@ -78,8 +81,21 @@ def login():
             user = User.query.filter_by(username=username).first()
             
             if user and user.check_password(password):
-                login_user(user)
-                return redirect(url_for('index'))
+                login_user(user, remember=True)
+                response = make_response(redirect(url_for('index')))
+                response.set_cookie('session', 
+                                 value=request.cookies.get('session'),
+                                 secure=True,
+                                 httponly=True,
+                                 samesite='Lax',
+                                 max_age=timedelta(hours=24))
+                
+                # Get next page from args or default to index
+                next_page = request.args.get('next')
+                if not next_page or not next_page.startswith('/'):
+                    next_page = url_for('index')
+                    
+                return response
             else:
                 flash('Invalid username or password', 'error')
         except Exception as e:
@@ -87,6 +103,21 @@ def login():
             print(f"Login error: {str(e)}")  # Log the error
     
     return render_template('login.html')
+
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    REMEMBER_COOKIE_SECURE=True,
+    REMEMBER_COOKIE_HTTPONLY=True,
+    REMEMBER_COOKIE_DURATION=timedelta(hours=24)
+)
+
+# Update login manager configuration 
+login_manager.session_protection = "strong"
+login_manager.refresh_view = "login"
+login_manager.needs_refresh_message = "Please login again to confirm your identity"
+login_manager.needs_refresh_message_category = "info"
 
 @app.route('/get_team_members')
 @login_required
