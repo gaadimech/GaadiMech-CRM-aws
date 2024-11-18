@@ -12,26 +12,32 @@ from flask_limiter.util import get_remote_address
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')  # Provide a default secret key
+
+# Database configuration
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL is None:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///crm.db'
+else:
+    # Handle Render.com's Postgres URL format
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-limiter = Limiter(
-    key_func=get_remote_address,
-    app=app,
-    storage_uri="memory://"
-)
-
-if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
-    app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://')
-
+# Initialize database and login manager
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+# Configure rate limiter
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    storage_uri="memory://"
+)
 
 # Database Models
 class User(UserMixin, db.Model):
@@ -50,7 +56,7 @@ class User(UserMixin, db.Model):
 
 class Lead(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    customer_name = db.Column(db.String(100), nullable=False)  # Changed from 'user' to 'customer_name'
+    customer_name = db.Column(db.String(100), nullable=False)
     mobile = db.Column(db.String(12), nullable=False)
     followup_date = db.Column(db.DateTime, nullable=False)
     remarks = db.Column(db.Text)
@@ -67,13 +73,18 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        user = User.query.filter_by(username=username).first()
         
-        if user and user.check_password(password):
-            login_user(user)
-            return redirect(url_for('index'))
-        else:
-            flash('Invalid username or password', 'error')
+        try:
+            user = User.query.filter_by(username=username).first()
+            
+            if user and user.check_password(password):
+                login_user(user)
+                return redirect(url_for('index'))
+            else:
+                flash('Invalid username or password', 'error')
+        except Exception as e:
+            flash('An error occurred during login. Please try again.', 'error')
+            print(f"Login error: {str(e)}")  # Log the error
     
     return render_template('login.html')
 
@@ -88,9 +99,8 @@ def get_team_members():
 @app.route('/open_whatsapp/<mobile>')
 @login_required
 def open_whatsapp(mobile):
-    # Format the mobile number (remove any non-digit characters and ensure proper format)
     cleaned_mobile = ''.join(filter(str.isdigit, mobile))
-    if len(cleaned_mobile) == 10:  # If it's a 10-digit number, add country code
+    if len(cleaned_mobile) == 10:
         cleaned_mobile = '91' + cleaned_mobile
     whatsapp_url = f"https://web.whatsapp.com/send?phone={cleaned_mobile}"
     return jsonify({'url': whatsapp_url})
@@ -111,125 +121,166 @@ def index():
 @login_required
 @limiter.limit("30 per minute")
 def add_lead():
-    customer_name = request.form.get('customer_name')  # Updated from 'user'
-    mobile = request.form.get('mobile')
-    followup_date = request.form.get('followup_date')
-    remarks = request.form.get('remarks')
+    try:
+        customer_name = request.form.get('customer_name')
+        mobile = request.form.get('mobile')
+        followup_date = request.form.get('followup_date')
+        remarks = request.form.get('remarks')
 
-    if not re.match(r'^\d{10}$|^\d{12}$', mobile):
-        flash('Mobile number must be either 10 or 12 digits', 'error')
-        return redirect(url_for('index'))
+        if not all([customer_name, mobile, followup_date]):
+            flash('All required fields must be filled', 'error')
+            return redirect(url_for('index'))
 
-    followup_date = datetime.strptime(followup_date, '%Y-%m-%d')
+        if not re.match(r'^\d{10}$|^\d{12}$', mobile):
+            flash('Mobile number must be either 10 or 12 digits', 'error')
+            return redirect(url_for('index'))
 
-    new_lead = Lead(
-        customer_name=customer_name,  # Updated from 'user'
-        mobile=mobile,
-        followup_date=followup_date,
-        remarks=remarks,
-        creator_id=current_user.id
-    )
+        followup_date = datetime.strptime(followup_date, '%Y-%m-%d')
+
+        new_lead = Lead(
+            customer_name=customer_name,
+            mobile=mobile,
+            followup_date=followup_date,
+            remarks=remarks,
+            creator_id=current_user.id
+        )
+        
+        db.session.add(new_lead)
+        db.session.commit()
+        
+        flash('Lead added successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error adding lead. Please try again.', 'error')
+        print(f"Error adding lead: {str(e)}")  # Log the error
     
-    db.session.add(new_lead)
-    db.session.commit()
-    
-    flash('Lead added successfully!', 'success')
     return redirect(url_for('index'))
 
 @app.route('/followups')
 @login_required
 def followups():
-    # Get team members only if user is admin
-    team_members = User.query.all() if current_user.is_admin else []
-    
-    selected_member_id = request.args.get('team_member_id', '')
-    date = request.args.get('date', '')
-    
-    query = Lead.query
-    
-    if current_user.is_admin:
-        # Admin can filter by team member
-        if selected_member_id:
-            query = query.filter(Lead.creator_id == selected_member_id)
-    else:
-        # Non-admin users can only see their own leads
-        query = query.filter(Lead.creator_id == current_user.id)
-    
-    if date:
-        selected_date = datetime.strptime(date, '%Y-%m-%d')
-        query = query.filter(db.func.date(Lead.followup_date) == selected_date.date())
-    
-    followups = query.order_by(Lead.followup_date.desc()).all()
-    return render_template('followups.html', 
-                         followups=followups, 
-                         team_members=team_members,
-                         selected_member_id=selected_member_id)
+    try:
+        team_members = User.query.all() if current_user.is_admin else []
+        selected_member_id = request.args.get('team_member_id', '')
+        date = request.args.get('date', '')
+        
+        query = Lead.query
+        
+        if current_user.is_admin:
+            if selected_member_id:
+                query = query.filter(Lead.creator_id == selected_member_id)
+        else:
+            query = query.filter(Lead.creator_id == current_user.id)
+        
+        if date:
+            selected_date = datetime.strptime(date, '%Y-%m-%d')
+            query = query.filter(db.func.date(Lead.followup_date) == selected_date.date())
+        
+        followups = query.order_by(Lead.followup_date.desc()).all()
+        return render_template('followups.html', 
+                             followups=followups, 
+                             team_members=team_members,
+                             selected_member_id=selected_member_id)
+    except Exception as e:
+        flash('Error loading followups. Please try again.', 'error')
+        print(f"Error loading followups: {str(e)}")  # Log the error
+        return redirect(url_for('index'))
 
 @app.route('/edit_lead/<int:lead_id>', methods=['GET', 'POST'])
 @login_required
 def edit_lead(lead_id):
-    lead = Lead.query.get_or_404(lead_id)
-    
-    # Check if user has permission to edit
-    if not current_user.is_admin and lead.creator_id != current_user.id:
-        flash('You do not have permission to edit this lead', 'error')
-        return redirect(url_for('followups'))
+    try:
+        lead = Lead.query.get_or_404(lead_id)
         
-    if request.method == 'POST':
-        lead.customer_name = request.form['customer_name']
-        lead.mobile = request.form['mobile']
-        lead.followup_date = datetime.strptime(request.form['followup_date'], '%Y-%m-%d')
-        lead.remarks = request.form['remarks']
-        db.session.commit()
-        flash('Lead updated successfully!', 'success')
+        if not current_user.is_admin and lead.creator_id != current_user.id:
+            flash('You do not have permission to edit this lead', 'error')
+            return redirect(url_for('followups'))
+            
+        if request.method == 'POST':
+            lead.customer_name = request.form['customer_name']
+            lead.mobile = request.form['mobile']
+            lead.followup_date = datetime.strptime(request.form['followup_date'], '%Y-%m-%d')
+            lead.remarks = request.form['remarks']
+            db.session.commit()
+            flash('Lead updated successfully!', 'success')
+            return redirect(url_for('followups'))
+        
+        return render_template('edit_lead.html', lead=lead)
+    except Exception as e:
+        db.session.rollback()
+        flash('Error updating lead. Please try again.', 'error')
+        print(f"Error updating lead: {str(e)}")  # Log the error
         return redirect(url_for('followups'))
-    
-    return render_template('edit_lead.html', lead=lead)
 
 @app.route('/delete_lead/<int:lead_id>', methods=['POST'])
 @login_required
 def delete_lead(lead_id):
-    lead = Lead.query.get_or_404(lead_id)
-    
-    # Check if user has permission to delete
-    if not current_user.is_admin and lead.creator_id != current_user.id:
-        return jsonify({'success': False, 'message': 'Permission denied'})
+    try:
+        lead = Lead.query.get_or_404(lead_id)
         
-    db.session.delete(lead)
-    db.session.commit()
-    return jsonify({'success': True})
-
-
-def init_db():
-    # Remove the existing database file if it exists
-    if os.path.exists('instance/crm.db'):
-        os.remove('instance/crm.db')
-    
-    with app.app_context():
-        # Create all tables
-        db.create_all()
-        
-        # Create admin user
-        admin = User(
-            username='admin',
-            name='Administrator',
-            is_admin=True
-        )
-        admin.set_password('admin123')  # Change this in production!
-        db.session.add(admin)
-        
-        # Create some test users
-        test_user = User(
-            username='test_user',
-            name='Test User',
-            is_admin=False
-        )
-        test_user.set_password('test123')
-        db.session.add(test_user)
+        if not current_user.is_admin and lead.creator_id != current_user.id:
+            return jsonify({'success': False, 'message': 'Permission denied'})
+            
+        db.session.delete(lead)
         db.session.commit()
-        
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting lead: {str(e)}")  # Log the error
+        return jsonify({'success': False, 'message': 'Error deleting lead'})
 
-        
+@app.route('/init_db', methods=['GET'])
+def initialize_database():
+    if not os.getenv('ALLOW_DB_INIT', '').lower() == 'true':
+        return "Database initialization is disabled", 403
+    
+    try:
+        with app.app_context():
+            # Create all tables
+            db.create_all()
+            
+            # Check if admin user exists
+            admin = User.query.filter_by(username='admin').first()
+            if not admin:
+                # Create admin user
+                admin = User(
+                    username='admin',
+                    name='Administrator',
+                    is_admin=True
+                )
+                admin.set_password('admin123')
+                db.session.add(admin)
+                
+                # Create test user
+                test_user = User(
+                    username='test_user',
+                    name='Test User',
+                    is_admin=False
+                )
+                test_user.set_password('test123')
+                db.session.add(test_user)
+                
+                db.session.commit()
+                return "Database initialized successfully!", 200
+            else:
+                return "Database already initialized!", 200
+                
+    except Exception as e:
+        db.session.rollback()
+        error_message = f"Error initializing database: {str(e)}"
+        print(error_message)  # Log the error
+        return error_message, 500
+
+# Error handlers
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('error.html', error="404 - Page Not Found"), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()  # In case of database error
+    return render_template('error.html', error="500 - Internal Server Error"), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
