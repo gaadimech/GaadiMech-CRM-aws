@@ -150,7 +150,7 @@
                                 {% for followup in followups %}
                                     <tr>
                                         <td>{{ followup.customer_name }}</td>
-                                        <td>{{ followup.mobile }}</td>
+                                        <td><a href="javascript:void(0);" onclick="copyToDialer('{{ followup.mobile }}')">{{ followup.mobile }}</a></td>
                                         <td>{{ followup.followup_date.strftime('%Y-%m-%d') }}</td>
                                         <td>{{ followup.remarks }}</td>
                                         <td>{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
@@ -193,7 +193,7 @@
             </div>
         </div>
     </div>
-
+    
     <!-- Bootstrap JS Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
@@ -223,6 +223,18 @@
                 })
                 .catch(error => console.error('Error:', error));
             }
+        }
+
+        function copyToDialer(mobile) {
+            // Copy the mobile number to the clipboard
+            navigator.clipboard.writeText(mobile).then(function() {
+                console.log('Mobile number copied to clipboard');
+            }, function(err) {
+                console.error('Could not copy text: ', err);
+            });
+
+            // Redirect to the phone's dialer with the mobile number
+            window.location.href = `tel:${mobile}`;
         }
     </script>
 </body>
