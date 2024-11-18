@@ -283,7 +283,7 @@ def delete_lead(lead_id):
 
 @app.route('/init_db', methods=['GET'])
 def initialize_database():
-    if not os.getenv('ALLOW_DB_INIT', '').lower() == 'true':
+    if not os.getenv('ALLOW_DB_INIT', '').lower() == 'False':
         return "Database initialization is disabled", 403
     
     try:
