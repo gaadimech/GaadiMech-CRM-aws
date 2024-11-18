@@ -82,29 +82,33 @@ def login():
         try:
             user = User.query.filter_by(username=username).first()
             
-            if user and user.check_password(password):
-                login_user(user, remember=True)
-                response = make_response(redirect(url_for('index')))
-                response.set_cookie('session', 
-                                 value=request.cookies.get('session'),
-                                 secure=True,
-                                 httponly=True,
-                                 samesite='Lax',
-                                 max_age=timedelta(hours=24))
-                
-                # Get next page from args or default to index
-                next_page = request.args.get('next')
-                if not next_page or not next_page.startswith('/'):
-                    next_page = url_for('index')
+            if user:
+                if user.check_password(password):
+                    login_user(user, remember=True)
+                    response = make_response(redirect(url_for('index')))
+                    response.set_cookie('session', 
+                                     value=request.cookies.get('session'),
+                                     secure=True,
+                                     httponly=True,
+                                     samesite='Lax',
+                                     max_age=timedelta(hours=24))
                     
-                return response
+                    # Get next page from args or default to index
+                    next_page = request.args.get('next')
+                    if not next_page or not next_page.startswith('/'):
+                        next_page = url_for('index')
+                        
+                    return response
+                else:
+                    flash('Invalid password', 'error')
             else:
-                flash('Invalid username or password', 'error')
+                flash('Invalid username', 'error')
         except Exception as e:
             flash('An error occurred during login. Please try again.', 'error')
             print(f"Login error: {str(e)}")  # Log the error
     
     return render_template('login.html')
+
 
 app.config.update(
     SESSION_COOKIE_SECURE=True,
