@@ -84,6 +84,7 @@ def login():
         
         try:
             user = User.query.filter_by(username=username).first()
+            print(f"User found: {user}")  # Debug statement
             
             if user:
                 if user.check_password(password):
@@ -113,6 +114,7 @@ def login():
             print(f"Login error: {str(e)}")  # Log the error
     
     return render_template('login.html')
+
 
 
 
