@@ -70,7 +70,7 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit("5 per minute")
+@limiter.limit("20 per minute")
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
@@ -147,8 +147,15 @@ def open_whatsapp(mobile):
     cleaned_mobile = ''.join(filter(str.isdigit, mobile))
     if len(cleaned_mobile) == 10:
         cleaned_mobile = '91' + cleaned_mobile
-    whatsapp_url = f"https://web.whatsapp.com/send?phone={cleaned_mobile}"
+    
+    user_agent = request.headers.get('User-Agent')
+    if 'Mobile' in user_agent:
+        whatsapp_url = f"whatsapp://send?phone={cleaned_mobile}"
+    else:
+        whatsapp_url = f"https://web.whatsapp.com/send?phone={cleaned_mobile}"
+    
     return jsonify({'url': whatsapp_url})
+
 
 @app.route('/logout')
 @login_required
