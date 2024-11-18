@@ -79,6 +79,9 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
+        print(f"Received username: {username}")  # Debug statement
+        print(f"Received password: {password}")  # Debug statement
+        
         try:
             user = User.query.filter_by(username=username).first()
             
@@ -101,13 +104,16 @@ def login():
                     return response
                 else:
                     flash('Invalid password', 'error')
+                    print(f"Password check failed for user: {username}")  # Log the failure
             else:
                 flash('Invalid username', 'error')
+                print(f"User not found: {username}")  # Log the failure
         except Exception as e:
             flash('An error occurred during login. Please try again.', 'error')
             print(f"Login error: {str(e)}")  # Log the error
     
     return render_template('login.html')
+
 
 
 app.config.update(
