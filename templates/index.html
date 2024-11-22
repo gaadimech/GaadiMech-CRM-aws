@@ -66,6 +66,15 @@
                     </div>
 
                     <div class="mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="Did Not Pick Up">Did Not Pick Up</option>
+                            <option value="Needs Followup" selected>Needs Followup</option>
+                            <option value="Confirmed">Confirmed</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
                         <label for="remarks" class="form-label">Remarks</label>
                         <textarea class="form-control" id="remarks" name="remarks" rows="3"></textarea>
                     </div>

@@ -62,6 +62,7 @@ class Lead(db.Model):
     mobile = db.Column(db.String(12), nullable=False)
     followup_date = db.Column(db.DateTime, nullable=False)
     remarks = db.Column(db.Text)
+    status = db.Column(db.String(20), nullable=False, default='Needs Followup')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     creator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
@@ -178,6 +179,9 @@ def add_lead():
         mobile = request.form.get('mobile')
         followup_date = request.form.get('followup_date')
         remarks = request.form.get('remarks')
+        status = request.form.get('status')
+        if not status or status not in ['Did Not Pick Up', 'Needs Followup', 'Confirmed']:
+            status = 'Needs Followup'
 
         if not all([customer_name, mobile, followup_date]):
             flash('All required fields must be filled', 'error')
@@ -194,6 +198,7 @@ def add_lead():
             mobile=mobile,
             followup_date=followup_date,
             remarks=remarks,
+            status=status,
             creator_id=current_user.id
         )
         
@@ -217,6 +222,10 @@ def followups():
         date = request.args.get('date', '')
         
         query = Lead.query
+
+        status_filter = request.args.get('status', '')
+        if status_filter:
+            query = query.filter(Lead.status == status_filter)
         
         if current_user.is_admin:
             if selected_member_id:
@@ -253,6 +262,7 @@ def edit_lead(lead_id):
             lead.mobile = request.form['mobile']
             lead.followup_date = datetime.strptime(request.form['followup_date'], '%Y-%m-%d')
             lead.remarks = request.form['remarks']
+            lead.status = request.form['status']
             db.session.commit()
             flash('Lead updated successfully!', 'success')
             return redirect(url_for('followups'))
