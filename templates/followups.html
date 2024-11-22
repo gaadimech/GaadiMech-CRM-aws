@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GaadiMech CRM - Followups</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.5.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .navbar {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .card-title {
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
     <!-- Navbar -->
@@ -76,8 +85,7 @@
                         <div class="col-md-4">
                             <div class="mb-3">
                                 <label for="date" class="form-label">Followup Date</label>
-                                <input type="date" class="form-control" id="date" name="date" 
-                                       value="{{ request.args.get('date', '') }}">
+                                <input type="date" class="form-control" id="date" name="date" value="{{ request.args.get('date', '') }}">
                             </div>
                         </div>
 
@@ -144,14 +152,11 @@
                                     <tr>
                                         <td>{{ followup.customer_name }}</td>
                                         <td>
-                                            <a href="javascript:void(0);" onclick="copyToDialer('{{ followup.mobile }}')" 
-                                               class="text-decoration-none">{{ followup.mobile }}</a>
+                                            <a href="javascript:void(0);" onclick="copyToDialer('{{ followup.mobile }}')" class="text-decoration-none">{{ followup.mobile }}</a>
                                         </td>
                                         <td>{{ followup.followup_date.strftime('%Y-%m-%d') }}</td>
                                         <td>
-                                            <span class="badge {% if followup.status == 'Confirmed' %}bg-success{% elif followup.status == 'Did Not Pick Up' %}bg-danger{% else %}bg-warning{% endif %}">
-                                                {{ followup.status }}
-                                            </span>
+                                            <span class="badge {% if followup.status == 'Confirmed' %}bg-success{% elif followup.status == 'Did Not Pick Up' %}bg-danger{% else %}bg-warning{% endif %}">{{ followup.status }}</span>
                                         </td>
                                         <td>{{ followup.remarks }}</td>
                                         <td>{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
@@ -159,34 +164,17 @@
                                             <td>{{ followup.creator.name }}</td>
                                         {% endif %}
                                         <td>
-                                            <div class="btn-group" role="group">
-                                                <a href="javascript:void(0);" 
-                                                   onclick="openWhatsApp('{{ followup.mobile }}')" 
-                                                   class="btn btn-success btn-sm" 
-                                                   title="Open WhatsApp">
-                                                    <i class="bi bi-whatsapp"></i>
-                                                </a>
-                                                {% if current_user.is_admin or followup.creator_id == current_user.id %}
-                                                    <a href="{{ url_for('edit_lead', lead_id=followup.id) }}" 
-                                                       class="btn btn-primary btn-sm" 
-                                                       title="Edit Lead">
-                                                        <i class="bi bi-pencil"></i>
-                                                    </a>
-                                                    <button onclick="deleteLead({{ followup.id }})" 
-                                                            class="btn btn-danger btn-sm" 
-                                                            title="Delete Lead">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                {% endif %}
-                                            </div>
+                                            <a href="javascript:void(0);" onclick="openWhatsApp('{{ followup.mobile }}')" title="Open WhatsApp"><i class="bi bi-whatsapp text-success"></i></a>
+                                            {% if current_user.is_admin or followup.creator_id == current_user.id %}
+                                                <a href="{{ url_for('edit_lead', lead_id=followup.id) }}" title="Edit Lead"><i class="bi bi-pencil text-primary"></i></a>
+                                                <a href="javascript:void(0);" onclick="deleteLead({{ followup.id }})" title="Delete Lead"><i class="bi bi-trash text-danger"></i></a>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="{% if current_user.is_admin %}8{% else %}7{% endif %}" class="text-center">
-                                        No followups found for the selected criteria
-                                    </td>
+                                    <td colspan="{% if current_user.is_admin %}8{% else %}7{% endif %}" class="text-center">No followups found for the selected criteria</td>
                                 </tr>
                             {% endif %}
                         </tbody>
@@ -224,18 +212,4 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    } else {
-                        alert(data.message || 'Error deleting lead');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error deleting lead');
-                });
-            }
-        }
-    </script>
-</body>
-</html>
+                    if (data.success)[_{{{CITATION{{{_1{](https://github.com/wasitmirani/ulovmusic/tree/940342e28f220a8bbdbebbd8b7eeeb4243200bfe/resources%2Fviews%2Flayouts%2Ffrontend%2Fmaster.blade.php)[_{{{CITATION{{{_2{](https://github.com/j3c118136/pert9/tree/eeb756a48eb0d7a93664e89a0bc0f0427a660691/app%2FViews%2Fheader_v.php)[_{{{CITATION{{{_3{](https://github.com/Rishika36/mobilepay100/tree/26de2972eb7282624cfecca7e3df25b533872577/sparks%2Fnav.php)[_{{{CITATION{{{_4{](https://github.com/juanpablo-code2003/marcha/tree/bcdc214e6303e4b896f739cf22c22e2e75d3a4e2/app%2FViews%2Fingreso.php)[_{{{CITATION{{{_5{](https://github.com/lucathree/lucathree.github.io/tree/69d9a3b4dbdf5bb88afbdd94858cfb95b2aa75cc/_posts%2F2021%2F2021-07-28-1-miniproject3.md)
