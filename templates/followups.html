@@ -1,211 +1,185 @@
-<div class="container">
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <a class="navbar-brand" href="{{ url_for('index') }}">GaadiMech CRM Portal</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('index') }}">Add Lead</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link active" href="{{ url_for('followups') }}">View Followups</a>
-                </li>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GaadiMech CRM Portal - Followups</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { text-align: left; padding: 8px; }
+        a { color: #0066cc; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .search-section { margin-bottom: 30px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        select, input[type="date"] { padding: 5px; font-size: 16px; }
+        .button-group { margin-top: 15px; }
+        .search-button { padding: 5px 15px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <a href="{{ url_for('index') }}">GaadiMech CRM Portal</a>
+        </h1>
+        
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('index') }}">Add Lead</a></li>
+                <li><a href="{{ url_for('followups') }}">View Followups</a></li>
+                <li>Welcome, {{ current_user.name }}</li>
+                <li><a href="{{ url_for('logout') }}">Logout</a></li>
             </ul>
-            <ul class="navbar-nav">
-                <li class="nav-item">
-                    <span class="nav-link">Welcome, {{ current_user.name }}</span>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
-                </li>
-            </ul>
-        </div>
-    </nav>
+        </nav>
 
-    <div class="container mt-4">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
+                    <div class="alert">{{ message }}</div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
 
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="card-title mb-0">Search Followups</h5>
-            </div>
-            <div class="card-body">
-                <form method="GET" action="{{ url_for('followups') }}">
-                    <div class="row">
-                        {% if current_user.is_admin %}
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="team_member_id" class="form-label">Team Member</label>
-                                <select class="form-select" name="team_member_id" id="team_member_id">
-                                    <option value="">All Team Members</option>
-                                    {% for member in team_members %}
-                                        <option value="{{ member.id }}" {% if selected_member_id|string == member.id|string %}selected{% endif %}>
-                                            {{ member.name }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        {% endif %}
-                        <div class="col-md-{% if current_user.is_admin %}6{% else %}12{% endif %}">
-                            <div class="mb-3">
-                                <label for="date" class="form-label">Followup Date</label>
-                                <input type="date" class="form-control" id="date" name="date" value="{{ request.args.get('date', '') }}">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <button type="submit" class="btn btn-primary">Search</button>
-                        <a href="{{ url_for('followups') }}" class="btn btn-secondary">Reset</a>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <div class="card shadow-sm">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
-                    {% if current_user.is_admin %}
-                        {% if selected_member_id %}
-                            {% for member in team_members %}
-                                {% if member.id|string == selected_member_id|string %}
-                                    Leads for {{ member.name }}
-                                {% endif %}
-                            {% endfor %}
-                        {% else %}
-                            All Team Leads
-                        {% endif %}
-                    {% else %}
-                        Your Leads
-                    {% endif %}
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Customer Name</th>
-                                <th>Mobile</th>
-                                <th>Followup Date</th>
-                                <th>Remarks</th>
-                                <th>Created At</th>
-                                {% if current_user.is_admin %}
-                                    <th>Created By</th>
-                                {% endif %}
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% if followups %}
-                                {% for followup in followups %}
-                                    <tr>
-                                        <td>{{ followup.customer_name }}</td>
-                                        <td>
-                                            <a href="javascript:void(0);" onclick="copyToDialer('{{ followup.mobile }}')">
-                                                {{ followup.mobile }}
-                                            </a>
-                                        </td>
-                                        <td>{{ followup.followup_date.strftime('%Y-%m-%d') }}</td>
-                                        <td>{{ followup.remarks }}</td>
-                                        <td>{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                                        {% if current_user.is_admin %}
-                                            <td>{{ followup.creator.name }}</td>
-                                        {% endif %}
-                                        <td>
-                                            <div class="btn-group" role="group">
-                                                {% if current_user.is_admin or followup.creator_id == current_user.id %}
-                                                    <a href="{{ url_for('edit_lead', lead_id=followup.id) }}" 
-                                                       class="btn btn-primary btn-sm" 
-                                                       title="Edit Lead">
-                                                        <i class="bi bi-pencil"></i> Edit
-                                                    </a>
-                                                    <button type="button" 
-                                                            class="btn btn-danger btn-sm"
-                                                            onclick="deleteLead({{ followup.id }})"
-                                                            title="Delete Lead">
-                                                        <i class="bi bi-trash"></i> Delete
-                                                    </button>
-                                                    <a href="javascript:void(0);" 
-                                                       onclick="openWhatsApp('{{ followup.mobile }}')"
-                                                       class="btn btn-success btn-sm"
-                                                       title="Open WhatsApp">
-                                                        <i class="bi bi-whatsapp"></i> WhatsApp
-                                                    </a>
-                                                {% endif %}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="{% if current_user.is_admin %}7{% else %}6{% endif %}" class="text-center">
-                                        No followups found for the selected criteria
-                                    </td>
-                                </tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
+        <div class="search-section">
+            <h2>Search Followups</h2>
+            <form method="GET" action="{{ url_for('followups') }}">
+                {% if current_user.is_admin %}
+                <div class="form-group">
+                    <label>Team Member</label>
+                    <select name="team_member_id">
+                        <option value="">All Team Members</option>
+                        {% for member in team_members %}
+                            <option value="{{ member.id }}" {% if selected_member_id|string == member.id|string %}selected{% endif %}>
+                                {{ member.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
                 </div>
-            </div>
+                {% endif %}
+                
+                <div class="form-group">
+                    <label>Followup Date</label>
+                    <input type="date" name="date" value="{{ request.args.get('date', '') }}">
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" class="search-button">Search</button>
+                    <a href="{{ url_for('followups') }}">Reset</a>
+                </div>
+            </form>
         </div>
+
+        <h2>
+            {% if current_user.is_admin %}
+                {% if selected_member_id %}
+                    {% for member in team_members %}
+                        {% if member.id|string == selected_member_id|string %}
+                            Leads for {{ member.name }}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    All Team Leads
+                {% endif %}
+            {% else %}
+                Your Leads
+            {% endif %}
+        </h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Customer Name</th>
+                    <th>Mobile</th>
+                    <th>Followup Date</th>
+                    <th>Remarks</th>
+                    <th>Created At</th>
+                    {% if current_user.is_admin %}
+                        <th>Created By</th>
+                    {% endif %}
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if followups %}
+                    {% for followup in followups %}
+                        <tr>
+                            <td>{{ followup.customer_name }}</td>
+                            <td>
+                                <a href="javascript:void(0);" onclick="copyToDialer('{{ followup.mobile }}')">
+                                    {{ followup.mobile }}
+                                </a>
+                            </td>
+                            <td>{{ followup.followup_date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ followup.remarks }}</td>
+                            <td>{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            {% if current_user.is_admin %}
+                                <td>{{ followup.creator.name }}</td>
+                            {% endif %}
+                            <td>
+                                {% if current_user.is_admin or followup.creator_id == current_user.id %}
+                                    <a href="{{ url_for('edit_lead', lead_id=followup.id) }}">Edit</a>
+                                    <button onclick="deleteLead({{ followup.id }})">Delete</button>
+                                    <a href="javascript:void(0);" onclick="openWhatsApp('{{ followup.mobile }}')">WhatsApp</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="{% if current_user.is_admin %}7{% else %}6{% endif %}">
+                            No followups found for the selected criteria
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
     </div>
-</div>
 
-<script>
-function deleteLead(leadId) {
-    if (confirm('Are you sure you want to delete this lead?')) {
-        fetch(`/delete_lead/${leadId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
+    <script>
+        function deleteLead(leadId) {
+            if (confirm('Are you sure you want to delete this lead?')) {
+                fetch(`/delete_lead/${leadId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert(data.message || 'Error deleting lead');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error deleting lead');
+                });
             }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                location.reload();
+        }
+
+        function copyToDialer(mobile) {
+            if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+                window.location.href = `tel:${mobile}`;
             } else {
-                alert(data.message || 'Error deleting lead');
+                navigator.clipboard.writeText(mobile)
+                    .then(() => alert('Mobile number copied to clipboard'))
+                    .catch(err => console.error('Failed to copy:', err));
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error deleting lead');
-        });
-    }
-}
+        }
 
-function copyToDialer(mobile) {
-    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-        window.location.href = `tel:${mobile}`;
-    } else {
-        navigator.clipboard.writeText(mobile)
-            .then(() => alert('Mobile number copied to clipboard'))
-            .catch(err => console.error('Failed to copy:', err));
-    }
-}
-
-function openWhatsApp(mobile) {
-    fetch(`/open_whatsapp/${mobile}`)
-        .then(response => response.json())
-        .then(data => {
-            window.open(data.url, '_blank');
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error opening WhatsApp');
-        });
-}
-</script>
+        function openWhatsApp(mobile) {
+            fetch(`/open_whatsapp/${mobile}`)
+                .then(response => response.json())
+                .then(data => {
+                    window.open(data.url, '_blank');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error opening WhatsApp');
+                });
+        }
+    </script>
+</body>
+</html>
