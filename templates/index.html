@@ -47,17 +47,16 @@
             <div class="card-header">
                 <h5 class="card-title mb-0">Add New Lead</h5>
             </div>
-
             <div class="card-body">
-                <form action="{{ url_for('add_lead') }}" method="post">
+                <form action="{{ url_for('add_lead') }}" method="POST">
                     <div class="mb-3">
                         <label for="customer_name" class="form-label">Customer Name</label>
                         <input type="text" class="form-control" id="customer_name" name="customer_name" required>
                     </div>
-
+                    
                     <div class="mb-3">
                         <label for="mobile" class="form-label">Mobile Number</label>
-                        <input type="text" class="form-control" id="mobile" name="mobile" required pattern="\d{10}|\d{12}">
+                        <input type="text" class="form-control" id="mobile" name="mobile" required>
                         <div class="form-text">Enter 10 or 12 digits only</div>
                     </div>
 
@@ -68,12 +67,7 @@
 
                     <div class="mb-3">
                         <label for="remarks" class="form-label">Remarks</label>
-                        <select class="form-select" id="remarks" name="remarks" required>
-                            <option value="" selected disabled>Select Remarks</option>
-                            <option value="Did not Pick Up">Did not Pick Up</option>
-                            <option value="Needs Followup">Needs Followup</option>
-                            <option value="Confirmed">Confirmed</option>
-                        </select>
+                        <textarea class="form-control" id="remarks" name="remarks" rows="3"></textarea>
                     </div>
 
                     <button type="submit" class="btn btn-primary">Add Lead</button>

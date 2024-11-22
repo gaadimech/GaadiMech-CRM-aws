@@ -9,15 +9,9 @@ from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address   
 from datetime import timedelta
-from enum import Enum
 
 
 load_dotenv()
-
-class RemarksChoices(str, Enum):
-    DID_NOT_PICKUP = "Did not Pick Up"
-    NEEDS_FOLLOWUP = "Needs Followup"
-    CONFIRMED = "Confirmed"
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'gaadimech123')  # Provide a default secret key
@@ -67,14 +61,9 @@ class Lead(db.Model):
     customer_name = db.Column(db.String(100), nullable=False)
     mobile = db.Column(db.String(12), nullable=False)
     followup_date = db.Column(db.DateTime, nullable=False)
-    remarks = db.Column(db.String(20), nullable=False)  # Keep as string but we'll validate the choices
+    remarks = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     creator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
-    def __init__(self, *args, **kwargs):
-        super(Lead, self).__init__(*args, **kwargs)
-        if self.remarks not in [choice.value for choice in RemarksChoices]:
-            raise ValueError("Invalid remarks choice")
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -178,8 +167,7 @@ def logout():
 @login_required
 def index():
     users = User.query.all()
-    remarks_choices = [choice.value for choice in RemarksChoices]
-    return render_template('index.html', users=users, remarks_choices=remarks_choices)
+    return render_template('index.html', users=users)
 
 @app.route('/add_lead', methods=['POST'])
 @login_required
@@ -191,13 +179,8 @@ def add_lead():
         followup_date = request.form.get('followup_date')
         remarks = request.form.get('remarks')
 
-        if not all([customer_name, mobile, followup_date, remarks]):
+        if not all([customer_name, mobile, followup_date]):
             flash('All required fields must be filled', 'error')
-            return redirect(url_for('index'))
-
-        # Validate that remarks is one of the allowed choices
-        if remarks not in [choice.value for choice in RemarksChoices]:
-            flash('Invalid remarks choice', 'error')
             return redirect(url_for('index'))
 
         if not re.match(r'^\d{10}$|^\d{12}$', mobile):
@@ -221,7 +204,7 @@ def add_lead():
     except Exception as e:
         db.session.rollback()
         flash('Error adding lead. Please try again.', 'error')
-        print(f"Error adding lead: {str(e)}")
+        print(f"Error adding lead: {str(e)}")  # Log the error
     
     return redirect(url_for('index'))
 
@@ -232,7 +215,6 @@ def followups():
         team_members = User.query.all() if current_user.is_admin else []
         selected_member_id = request.args.get('team_member_id', '')
         date = request.args.get('date', '')
-        remarks_choices = [choice.value for choice in RemarksChoices]
         
         query = Lead.query
         
@@ -250,11 +232,10 @@ def followups():
         return render_template('followups.html', 
                              followups=followups, 
                              team_members=team_members,
-                             selected_member_id=selected_member_id,
-                             remarks_choices=remarks_choices)
+                             selected_member_id=selected_member_id)
     except Exception as e:
         flash('Error loading followups. Please try again.', 'error')
-        print(f"Error loading followups: {str(e)}")
+        print(f"Error loading followups: {str(e)}")  # Log the error
         return redirect(url_for('index'))
 
 @app.route('/edit_lead/<int:lead_id>', methods=['GET', 'POST'])
@@ -262,32 +243,25 @@ def followups():
 def edit_lead(lead_id):
     try:
         lead = Lead.query.get_or_404(lead_id)
-        remarks_choices = [choice.value for choice in RemarksChoices]
         
         if not current_user.is_admin and lead.creator_id != current_user.id:
             flash('You do not have permission to edit this lead', 'error')
             return redirect(url_for('followups'))
             
         if request.method == 'POST':
-            remarks = request.form['remarks']
-            if remarks not in [choice.value for choice in RemarksChoices]:
-                flash('Invalid remarks choice', 'error')
-                return redirect(url_for('edit_lead', lead_id=lead_id))
-
             lead.customer_name = request.form['customer_name']
             lead.mobile = request.form['mobile']
             lead.followup_date = datetime.strptime(request.form['followup_date'], '%Y-%m-%d')
-            lead.remarks = remarks
-            
+            lead.remarks = request.form['remarks']
             db.session.commit()
             flash('Lead updated successfully!', 'success')
             return redirect(url_for('followups'))
         
-        return render_template('edit_lead.html', lead=lead, remarks_choices=remarks_choices)
+        return render_template('edit_lead.html', lead=lead)
     except Exception as e:
         db.session.rollback()
         flash('Error updating lead. Please try again.', 'error')
-        print(f"Error updating lead: {str(e)}")
+        print(f"Error updating lead: {str(e)}")  # Log the error
         return redirect(url_for('followups'))
 
 @app.route('/delete_lead/<int:lead_id>', methods=['POST'])
