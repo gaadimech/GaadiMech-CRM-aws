@@ -90,17 +90,16 @@
                         </div>
 
                         <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="status" class="form-label">Status</label>
-                                <select class="form-select" id="status" name="status">
-                                    <option value="">All Status</option>
-                                    <option value="Did Not Pick Up" {% if request.args.get('status') == 'Did Not Pick Up' %}selected{% endif %}>Did Not Pick Up</option>
-                                    <option value="Needs Followup" {% if request.args.get('status') == 'Needs Followup' %}selected{% endif %}>Needs Followup</option>
-                                    <option value="Confirmed" {% if request.args.get('status') == 'Confirmed' %}selected{% endif %}>Confirmed</option>
-                                </select>
+                                <div class="mb-3">
+                                    <label for="status" class="form-label">Status</label>
+                                    <select class="form-select" id="status" name="status">
+                                        <option value="">All Status</option>
+                                        <option value="Did Not Pick Up"> {% if request.args.get('status') == 'Did Not Pick Up' %}selected{% endif %}>Did Not Pick Up</option>
+                                        <option value="Needs Followup"> {% if request.args.get('status') == 'Needs Followup' %}selected{% endif %}>Needs Followup</option>
+                                        <option value="Confirmed"> {% if request.args.get('status') == 'Confirmed' %}selected{% endif %}>Confirmed</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                    </div>
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                         <button type="submit" class="btn btn-primary">Search</button>
@@ -203,13 +202,4 @@
         }
 
         function deleteLead(leadId) {
-            if (confirm('Are you sure you want to delete this lead?')) {
-                fetch(`/delete_lead/${leadId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success)[_{{{CITATION{{{_1{](https://github.com/wasitmirani/ulovmusic/tree/940342e28f220a8bbdbebbd8b7eeeb4243200bfe/resources%2Fviews%2Flayouts%2Ffrontend%2Fmaster.blade.php)[_{{{CITATION{{{_2{](https://github.com/j3c118136/pert9/tree/eeb756a48eb0d7a93664e89a0bc0f0427a660691/app%2FViews%2Fheader_v.php)[_{{{CITATION{{{_3{](https://github.com/Rishika36/mobilepay100/tree/26de2972eb7282624cfecca7e3df25b533872577/sparks%2Fnav.php)[_{{{CITATION{{{_4{](https://github.com/juanpablo-code2003/marcha/tree/bcdc214e6303e4b896f739cf22c22e2e75d3a4e2/app%2FViews%2Fingreso.php)[_{{{CITATION{{{_5{](https://github.com/lucathree/lucathree.github.io/tree/69d9a3b4dbdf5bb88afbdd94858cfb95b2aa75cc/_posts%2F2021%2F2021-07-28-1-miniproject3.md)
+            if [_{{{CITATION{{{_1{](https://github.com/SUNYunZeng/ChordDependencyChart/tree/57d410f4c52d25f50b5b976b81ac12de9cf21f3f/README.md)[_{{{CITATION{{{_2{](https://github.com/buribalazs/smooth-drag-order/tree/7b40d21d076c3e31765f61481f537beaf4c5ec9f/README.md)[_{{{CITATION{{{_3{](https://github.com/wasitmirani/ulovmusic/tree/940342e28f220a8bbdbebbd8b7eeeb4243200bfe/resources%2Fviews%2Flayouts%2Ffrontend%2Fmaster.blade.php)[_{{{CITATION{{{_4{](https://github.com/j3c118136/pert9/tree/eeb756a48eb0d7a93664e89a0bc0f0427a660691/app%2FViews%2Fheader_v.php)[_{{{CITATION{{{_5{](https://github.com/Rishika36/mobilepay100/tree/26de2972eb7282624cfecca7e3df25b533872577/sparks%2Fnav.php)[_{{{CITATION{{{_6{](https://github.com/juanpablo-code2003/marcha/tree/bcdc214e6303e4b896f739cf22c22e2e75d3a4e2/app%2FViews%2Fingreso.php)[_{{{CITATION{{{_7{](https://github.com/lucathree/lucathree.github.io/tree/69d9a3b4dbdf5bb88afbdd94858cfb95b2aa75cc/_posts%2F2021%2F2021-07-28-1-miniproject3.md)
