@@ -1,228 +1,262 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="container mt-4">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white">
-            <h5 class="card-title mb-0" id="search-followups">Search Followups</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                {% if current_user.is_admin %}
-                <div class="col-md-4 mb-3">
-                    <label class="form-label">Team Member</label>
-                    <select class="form-select" id="team_member_id" name="team_member_id">
-                        <option value="">All Team Members</option>
-                        {% for member in team_members %}
-                            <option value="{{ member.id }}" {% if member.id|string == selected_member_id %}selected{% endif %}>
-                                {{ member.name }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                {% endif %}
-
-                <div class="col-md-4 mb-3">
-                    <label class="form-label">Followup Date</label>
-                    <input type="date" class="form-control" id="date" name="date" 
-                           value="{{ request.args.get('date', '') }}">
-                </div>
-
-                <div class="col-md-4 mb-3">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" id="status" name="status">
-                        <option value="">All Status</option>
-                        <option value="Did Not Pick Up" {% if request.args.get('status') == 'Did Not Pick Up' %}selected{% endif %}>Did Not Pick Up</option>
-                        <option value="Needs Followup" {% if request.args.get('status') == 'Needs Followup' %}selected{% endif %}>Needs Followup</option>
-                        <option value="Confirmed" {% if request.args.get('status') == 'Confirmed' %}selected{% endif %}>Confirmed</option>
-                    </select>
-                </div>
-            </div>
-            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                <button class="btn btn-primary me-md-2" onclick="searchFollowups()">Search</button>
-                <a href="{{ url_for('followups') }}" class="btn btn-secondary">Reset</a>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GaadiMech CRM - Followups</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">GaadiMech CRM Portal</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">Add Lead</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('followups') }}">View Followups</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link">Welcome, {{ current_user.name }}</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                    </li>
+                </ul>
             </div>
         </div>
-    </div>
+    </nav>
 
-    <div class="card shadow-sm">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h5 class="card-title mb-0">
-                {% if current_user.is_admin %}
-                    {% if selected_member_id %}
-                        {% for member in team_members %}
-                            {% if member.id|string == selected_member_id|string %}
-                                Leads for {{ member.name }}
-                            {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        All Team Leads
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0" id="search-followups">Search Followups</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% if current_user.is_admin %}
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Team Member</label>
+                        <select class="form-select" id="team_member_id" name="team_member_id">
+                            <option value="">All Team Members</option>
+                            {% for member in team_members %}
+                                <option value="{{ member.id }}" {% if member.id|string == selected_member_id %}selected{% endif %}>
+                                    {{ member.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
                     {% endif %}
-                {% else %}
-                    Your Leads
-                {% endif %}
-            </h5>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Followup Date</label>
+                        <input type="date" class="form-control" id="date" name="date" 
+                               value="{{ request.args.get('date', '') }}">
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="">All Status</option>
+                            <option value="Did Not Pick Up" {% if request.args.get('status') == 'Did Not Pick Up' %}selected{% endif %}>Did Not Pick Up</option>
+                            <option value="Needs Followup" {% if request.args.get('status') == 'Needs Followup' %}selected{% endif %}>Needs Followup</option>
+                            <option value="Confirmed" {% if request.args.get('status') == 'Confirmed' %}selected{% endif %}>Confirmed</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button class="btn btn-primary me-md-2" onclick="searchFollowups()">Search</button>
+                    <a href="{{ url_for('followups') }}" class="btn btn-secondary">Reset</a>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-striped" id="followupsTable">
-                    <thead>
-                        <tr>
-                            <th>Customer Name</th>
-                            <th>Mobile</th>
-                            <th>Followup Date</th>
-                            <th>Status</th>
-                            <th>Remarks</th>
-                            <th onclick="sortTable(5)" style="cursor: pointer;">
-                                Created At 
-                                <span id="createdAtSort">&#x25BC;</span>
-                            </th>
-                            {% if current_user.is_admin %}
-                            <th>Created By</th>
-                            {% endif %}
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% if followups %}
-                            {% for followup in followups %}
-                            <tr>
-                                <td>{{ followup.customer_name }}</td>
-                                <td>
-                                    <a href="javascript:void(0);" class="text-decoration-none" 
-                                       onclick="copyToDialer('{{ followup.mobile }}')">
-                                        {{ followup.mobile }}
-                                    </a>
-                                </td>
-                                <td>{{ followup.followup_date.strftime('%Y-%m-%d') }}</td>
-                                <td>
-                                    <span class="badge {% if followup.status == 'Confirmed' %}bg-success{% elif followup.status == 'Did Not Pick Up' %}bg-danger{% else %}bg-warning{% endif %}">
-                                        {{ followup.status }}
-                                    </span>
-                                </td>
-                                <td>{{ followup.remarks }}</td>
-                                <td>{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                                {% if current_user.is_admin %}
-                                <td>{{ followup.creator.name }}</td>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    {% if current_user.is_admin %}
+                        {% if selected_member_id %}
+                            {% for member in team_members %}
+                                {% if member.id|string == selected_member_id|string %}
+                                    Leads for {{ member.name }}
                                 {% endif %}
-                                <td>
-                                    <div class="btn-group" role="group">
-                                        <a href="javascript:void(0);" class="btn btn-success btn-sm" 
-                                           onclick="openWhatsApp('{{ followup.mobile }}')">
-                                            WhatsApp
-                                        </a>
-                                        {% if current_user.is_admin or followup.creator_id == current_user.id %}
-                                        <a href="{{ url_for('edit_lead', lead_id=followup.id) }}" 
-                                           class="btn btn-primary btn-sm">
-                                            Edit
-                                        </a>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
                             {% endfor %}
                         {% else %}
-                            <tr>
-                                <td colspan="7" class="text-center">No followups found for the selected criteria</td>
-                            </tr>
+                            All Team Leads
                         {% endif %}
-                    </tbody>
-                </table>
+                    {% else %}
+                        Your Leads
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped" id="followupsTable">
+                        <thead>
+                            <tr>
+                                <th>Customer Name</th>
+                                <th>Mobile</th>
+                                <th>Followup Date</th>
+                                <th>Status</th>
+                                <th>Remarks</th>
+                                <th onclick="sortTable(5)" style="cursor: pointer;">
+                                    Created At 
+                                    <span id="createdAtSort">&#x25BC;</span>
+                                </th>
+                                {% if current_user.is_admin %}
+                                <th>Created By</th>
+                                {% endif %}
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if followups %}
+                                {% for followup in followups %}
+                                <tr>
+                                    <td>{{ followup.customer_name }}</td>
+                                    <td>
+                                        <a href="javascript:void(0);" class="text-decoration-none" 
+                                           onclick="copyToDialer('{{ followup.mobile }}')">
+                                            {{ followup.mobile }}
+                                        </a>
+                                    </td>
+                                    <td>{{ followup.followup_date.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        <span class="badge {% if followup.status == 'Confirmed' %}bg-success{% elif followup.status == 'Did Not Pick Up' %}bg-danger{% else %}bg-warning{% endif %}">
+                                            {{ followup.status }}
+                                        </span>
+                                    </td>
+                                    <td>{{ followup.remarks }}</td>
+                                    <td>{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    {% if current_user.is_admin %}
+                                    <td>{{ followup.creator.name }}</td>
+                                    {% endif %}
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="javascript:void(0);" class="btn btn-success btn-sm" 
+                                               onclick="openWhatsApp('{{ followup.mobile }}')">
+                                                WhatsApp
+                                            </a>
+                                            {% if current_user.is_admin or followup.creator_id == current_user.id %}
+                                            <a href="{{ url_for('edit_lead', lead_id=followup.id) }}" 
+                                               class="btn btn-primary btn-sm">
+                                                Edit
+                                            </a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center">No followups found for the selected criteria</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<script>
-let sortDirection = true; // true for descending, false for ascending
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    let sortDirection = true; // true for descending, false for ascending
 
-function searchFollowups() {
-    const teamMember = document.getElementById('team_member_id') ? 
-        document.getElementById('team_member_id').value : '';
-    const date = document.getElementById('date').value;
-    const status = document.getElementById('status').value;
+    function searchFollowups() {
+        const teamMember = document.getElementById('team_member_id') ? 
+            document.getElementById('team_member_id').value : '';
+        const date = document.getElementById('date').value;
+        const status = document.getElementById('status').value;
 
-    let url = "{{ url_for('followups') }}?";
-    
-    if (teamMember) url += `team_member_id=${teamMember}&`;
-    if (date) url += `date=${date}&`;
-    if (status) url += `status=${status}&`;
-
-    // Remove trailing &
-    url = url.replace(/&$/, '');
-
-    window.location.href = url;
-}
-
-function copyToDialer(mobile) {
-    navigator.clipboard.writeText(mobile).then(function() {
-        alert('Mobile number copied: ' + mobile);
-    }, function(err) {
-        console.error('Could not copy text: ', err);
-    });
-}
-
-function openWhatsApp(mobile) {
-    fetch(`/open_whatsapp/${mobile}`)
-        .then(response => response.json())
-        .then(data => {
-            window.open(data.url, '_blank');
-        })
-        .catch(error => console.error('Error:', error));
-}
-
-function sortTable(columnIndex) {
-    const table = document.getElementById('followupsTable');
-    const tbody = table.querySelector('tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-    const sortIcon = document.getElementById('createdAtSort');
-
-    // Exclude the "No followups found" row if it exists
-    const dataRows = rows.filter(row => !row.querySelector('td[colspan]'));
-
-    // Sort rows based on the created at column
-    dataRows.sort((a, b) => {
-        const cellA = a.querySelectorAll('td')[columnIndex].textContent.trim();
-        const cellB = b.querySelectorAll('td')[columnIndex].textContent.trim();
+        let url = "{{ url_for('followups') }}?";
         
-        // Parse datetime strings
-        const dateA = new Date(cellA);
-        const dateB = new Date(cellB);
-        
-        // Toggle sort direction
-        return sortDirection ? dateB - dateA : dateA - dateB;
-    });
+        if (teamMember) url += `team_member_id=${teamMember}&`;
+        if (date) url += `date=${date}&`;
+        if (status) url += `status=${status}&`;
 
-    // Clear the tbody and re-add sorted rows
-    tbody.innerHTML = '';
-    dataRows.forEach(row => tbody.appendChild(row));
+        // Remove trailing &
+        url = url.replace(/&$/, '');
 
-    // Add back "No followups found" row if it existed
-    const noDataRow = rows.find(row => row.querySelector('td[colspan]'));
-    if (noDataRow) {
-        tbody.appendChild(noDataRow);
+        window.location.href = url;
     }
 
-    // Update sort direction and icon
-    sortDirection = !sortDirection;
-    sortIcon.innerHTML = sortDirection ? '&#x25BC;' : '&#x25B2;';
-}
-
-// Default sort to latest first on page load
-document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('followupsTable').rows.length > 1) {
-        sortTable(5);
+    function copyToDialer(mobile) {
+        navigator.clipboard.writeText(mobile).then(function() {
+            alert('Mobile number copied: ' + mobile);
+        }, function(err) {
+            console.error('Could not copy text: ', err);
+        });
     }
-});
-</script>
-{% endblock %}
+
+    function openWhatsApp(mobile) {
+        fetch(`/open_whatsapp/${mobile}`)
+            .then(response => response.json())
+            .then(data => {
+                window.open(data.url, '_blank');
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    function sortTable(columnIndex) {
+        const table = document.getElementById('followupsTable');
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const sortIcon = document.getElementById('createdAtSort');
+
+        // Exclude the "No followups found" row if it exists
+        const dataRows = rows.filter(row => !row.querySelector('td[colspan]'));
+
+        // Sort rows based on the created at column
+        dataRows.sort((a, b) => {
+            const cellA = a.querySelectorAll('td')[columnIndex].textContent.trim();
+            const cellB = b.querySelectorAll('td')[columnIndex].textContent.trim();
+            
+            // Parse datetime strings
+            const dateA = new Date(cellA);
+            const dateB = new Date(cellB);
+            
+            // Toggle sort direction
+            return sortDirection ? dateB - dateA : dateA - dateB;
+        });
+
+        // Clear the tbody and re-add sorted rows
+        tbody.innerHTML = '';
+        dataRows.forEach(row => tbody.appendChild(row));
+
+        // Add back "No followups found" row if it existed
+        const noDataRow = rows.find(row => row.querySelector('td[colspan]'));
+        if (noDataRow) {
+            tbody.appendChild(noDataRow);
+        }
+
+        // Update sort direction and icon
+        sortDirection = !sortDirection;
+        sortIcon.innerHTML = sortDirection ? '&#x25BC;' : '&#x25B2;';
+    }
+
+    // Default sort to latest first on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        if (document.getElementById('followupsTable').rows.length > 1) {
+            sortTable(5);
+        }
+    });
+    </script>
+</body>
+</html>
