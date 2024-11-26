@@ -1,4 +1,3 @@
-pip install pytz
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -10,8 +9,7 @@ from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address   
 from datetime import timedelta
-import datetime
-import pytz
+
 
 
 load_dotenv()
@@ -66,10 +64,7 @@ class Lead(db.Model):
     followup_date = db.Column(db.DateTime, nullable=False)
     remarks = db.Column(db.Text)
     status = db.Column(db.String(20), nullable=False, default='Needs Followup')
-    now_utc = datetime.datetime.now(pytz.utc)
-    ist_timezone = pytz.timezone('Asia/Kolkata')
-    now_ist = now_utc.astimezone(ist_timezone)
-    created_at = db.Column(db.DateTime, now_ist)
+    created_at = db.Column(db.DateTime, default=datetime.now())
     creator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 @login_manager.user_loader
@@ -243,8 +238,7 @@ def followups():
             selected_date = datetime.strptime(date, '%Y-%m-%d')
             query = query.filter(db.func.date(Lead.followup_date) == selected_date.date())
         
-        # Default to sorting by created_at in descending order
-        followups = query.order_by(Lead.created_at.desc()).all()
+        followups = query.order_by(Lead.followup_date.desc()).all()
         return render_template('followups.html', 
                              followups=followups, 
                              team_members=team_members,
