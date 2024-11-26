@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address   
 from datetime import timedelta
-
+import datetime
+import pytz
 
 
 load_dotenv()
@@ -64,8 +65,10 @@ class Lead(db.Model):
     followup_date = db.Column(db.DateTime, nullable=False)
     remarks = db.Column(db.Text)
     status = db.Column(db.String(20), nullable=False, default='Needs Followup')
-    ist = pytz.timezone('Asia/Kolkata')
-    created_at = db.Column(db.DateTime, default=datetime.now(ist))
+    now_utc = datetime.datetime.now(pytz.utc)
+    ist_timezone = pytz.timezone('Asia/Kolkata')
+    now_ist = now_utc.astimezone(ist_timezone)
+    created_at = db.Column(db.DateTime, now_ist)
     creator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 @login_manager.user_loader
