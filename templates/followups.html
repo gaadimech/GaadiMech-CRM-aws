@@ -108,7 +108,7 @@
             </form>
         </div>
     </div>
-    
+
         <!-- Results Card -->
         <div class="card shadow-sm">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
@@ -161,7 +161,7 @@
                                             </span>
                                         </td>
                                         <td>{{ followup.remarks }}</td>
-                                        <td>{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                        <td>{{{ followup.created_at.astimezone(ZoneInfo('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M') }}</td>
                                         {% if current_user.is_admin %}
                                             <td>{{ followup.creator.name }}</td>
                                         {% endif %}
