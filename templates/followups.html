@@ -50,58 +50,65 @@
         {% endwith %}
 
         <!-- Search Card -->
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="card-title mb-0">Search Followups</h5>
-            </div>
-            <div class="card-body">
-                <form method="get" action="{{ url_for('followups') }}">
-                    <div class="row">
-                        {% if current_user.is_admin %}
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="team_member_id" class="form-label">Team Member</label>
-                                <select class="form-select" id="team_member_id" name="team_member_id">
-                                    <option value="">All Team Members</option>
-                                    {% for member in team_members %}
-                                        <option value="{{ member.id }}" {% if selected_member_id|string == member.id|string %}selected{% endif %}>
-                                            {{ member.name }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        {% endif %}
-                        
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="date" class="form-label">Followup Date</label>
-                                <input type="date" class="form-control" id="date" name="date" 
-                                       value="{{ request.args.get('date', '') }}">
-                            </div>
-                        </div>
-
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="status" class="form-label">Status</label>
-                                <select class="form-select" id="status" name="status">
-                                    <option value="">All Status</option>
-                                    <option value="Did Not Pick Up" {% if request.args.get('status') == 'Did Not Pick Up' %}selected{% endif %}>Did Not Pick Up</option>
-                                    <option value="Needs Followup" {% if request.args.get('status') == 'Needs Followup' %}selected{% endif %}>Needs Followup</option>
-                                    <option value="Confirmed" {% if request.args.get('status') == 'Confirmed' %}selected{% endif %}>Confirmed</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <button type="submit" class="btn btn-primary">Search</button>
-                        <a href="{{ url_for('followups') }}" class="btn btn-secondary">Reset</a>
-                    </div>
-                </form>
-            </div>
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h5 class="card-title mb-0">Search Followups</h5>
         </div>
+        <div class="card-body">
+            <form method="get" action="{{ url_for('followups') }}">
+                <div class="row">
+                    {% if current_user.is_admin %}
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="team_member_id" class="form-label">Team Member</label>
+                            <select class="form-select" id="team_member_id" name="team_member_id">
+                                <option value="">All Team Members</option>
+                                {% for member in team_members %}
+                                    <option value="{{ member.id }}" {% if selected_member_id|string == member.id|string %}selected{% endif %}>
+                                        {{ member.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="date" class="form-label">Followup Date</label>
+                            <input type="date" class="form-control" id="date" name="date" 
+                                   value="{{ request.args.get('date', '') }}">
+                        </div>
+                    </div>
 
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="created_date" class="form-label">Created Date</label>
+                            <input type="date" class="form-control" id="created_date" name="created_date" 
+                                   value="{{ request.args.get('created_date', '') }}">
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="">All Status</option>
+                                <option value="Did Not Pick Up" {% if request.args.get('status') == 'Did Not Pick Up' %}selected{% endif %}>Did Not Pick Up</option>
+                                <option value="Needs Followup" {% if request.args.get('status') == 'Needs Followup' %}selected{% endif %}>Needs Followup</option>
+                                <option value="Confirmed" {% if request.args.get('status') == 'Confirmed' %}selected{% endif %}>Confirmed</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    <a href="{{ url_for('followups') }}" class="btn btn-secondary">Reset</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
         <!-- Results Card -->
         <div class="card shadow-sm">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
