@@ -243,8 +243,7 @@ def followups():
         
         # Followup date filter
         if date:
-            selected_date = 
-            datetime.strptime(date, '%Y-%m-%d')
+            selected_date = datetime.strptime(date, '%Y-%m-%d')
             query = query.filter(db.func.date(Lead.followup_date) == selected_date.date())
 
         
