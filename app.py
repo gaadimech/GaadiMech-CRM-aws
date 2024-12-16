@@ -10,7 +10,6 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address   
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-import pytz
 
 
 
@@ -68,7 +67,7 @@ class Lead(db.Model):
     followup_date = db.Column(db.DateTime, nullable=False)
     remarks = db.Column(db.Text)
     status = db.Column(db.String(20), nullable=False, default='Needs Followup')
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')).replace(microsecond=0))
+    created_at = db.Column(db.DateTime, default=datetime.now())
     creator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 @login_manager.user_loader
