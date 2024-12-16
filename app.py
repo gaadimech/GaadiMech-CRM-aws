@@ -8,7 +8,9 @@ import os
 from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address   
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+import pytz
 
 
 
@@ -34,6 +36,8 @@ db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+print("Database connected")
 
 # Configure rate limiter
 limiter = Limiter(
@@ -64,7 +68,7 @@ class Lead(db.Model):
     followup_date = db.Column(db.DateTime, nullable=False)
     remarks = db.Column(db.Text)
     status = db.Column(db.String(20), nullable=False, default='Needs Followup')
-    created_at = db.Column(db.DateTime, default=datetime.now())
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')).replace(microsecond=0))
     creator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 @login_manager.user_loader
@@ -221,24 +225,37 @@ def followups():
         team_members = User.query.all() if current_user.is_admin else []
         selected_member_id = request.args.get('team_member_id', '')
         date = request.args.get('date', '')
+        created_date = request.args.get('created_date', '')
         
         query = Lead.query
 
+        # Status filter
         status_filter = request.args.get('status', '')
         if status_filter:
             query = query.filter(Lead.status == status_filter)
         
+        # User-based filtering
         if current_user.is_admin:
             if selected_member_id:
                 query = query.filter(Lead.creator_id == selected_member_id)
         else:
             query = query.filter(Lead.creator_id == current_user.id)
         
+        # Followup date filter
         if date:
-            selected_date = datetime.strptime(date, '%Y-%m-%d')
+            selected_date = 
+            datetime.strptime(date, '%Y-%m-%d')
             query = query.filter(db.func.date(Lead.followup_date) == selected_date.date())
+
         
-        followups = query.order_by(Lead.followup_date.desc()).all()
+        # Created date filter (new addition)
+        if created_date:
+            selected_created_date = datetime.strptime(created_date, '%Y-%m-%d')
+            query = query.filter(db.func.date(Lead.created_at) == selected_created_date.date())
+        
+        # Default sorting by latest created_at
+        followups = query.order_by(Lead.created_at.desc()).all()
+        
         return render_template('followups.html', 
                              followups=followups, 
                              team_members=team_members,
