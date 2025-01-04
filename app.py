@@ -280,6 +280,7 @@ def edit_lead(lead_id):
             lead.followup_date = datetime.strptime(request.form['followup_date'], '%Y-%m-%d')
             lead.remarks = request.form['remarks']
             lead.status = request.form['status']
+            lead.modified_at = datetime.now()
             db.session.commit()
             flash('Lead updated successfully!', 'success')
             return redirect(url_for('followups'))
