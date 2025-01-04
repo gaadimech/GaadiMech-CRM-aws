@@ -140,6 +140,7 @@
                                 <th>Remarks</th>
                                 <th>Created At</th>
                                 {% if current_user.is_admin %}
+                                    <th>Modified At</th>
                                     <th>Created By</th>
                                 {% endif %}
                                 <th>Actions</th>
@@ -163,6 +164,7 @@
                                         <td>{{ followup.remarks }}</td>
                                         <td>{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                                         {% if current_user.is_admin %}
+                                            <td>{{ followup.modified_at.strftime('%Y-%m-%d %H:%M') }}</td>
                                             <td>{{ followup.creator.name }}</td>
                                         {% endif %}
                                         <td>
@@ -191,7 +193,7 @@
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="{% if current_user.is_admin %}8{% else %}7{% endif %}" class="text-center">
+                                    <td colspan="{% if current_user.is_admin %}9{% else %}7{% endif %}" class="text-center">
                                         No followups found for the selected criteria
                                     </td>
                                 </tr>
