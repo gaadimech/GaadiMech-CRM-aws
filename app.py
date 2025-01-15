@@ -226,6 +226,7 @@ def followups():
         selected_member_id = request.args.get('team_member_id', '')
         date = request.args.get('date', '')
         created_date = request.args.get('created_date', '')
+        modified_date = request.args.get('modified_date', '')
         
         query = Lead.query
 
@@ -251,6 +252,11 @@ def followups():
         if created_date:
             selected_created_date = datetime.strptime(created_date, '%Y-%m-%d')
             query = query.filter(db.func.date(Lead.created_at) == selected_created_date.date())
+
+        # Modified date filter (only for admin)
+        if current_user.is_admin and modified_date:
+            selected_modified_date = datetime.strptime(modified_date, '%Y-%m-%d')
+            query = query.filter(db.func.date(Lead.modified_at) == selected_modified_date.date())
         
         # Default sorting by latest created_at
         followups = query.order_by(Lead.created_at.desc()).all()
