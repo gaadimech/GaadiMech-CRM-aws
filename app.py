@@ -185,7 +185,7 @@ def add_lead():
         followup_date = request.form.get('followup_date')
         remarks = request.form.get('remarks')
         status = request.form.get('status')
-        if not status or status not in ['Did Not Pick Up', 'Needs Followup', 'Confirmed']:
+        if not status or status not in ['Did Not Pick Up', 'Needs Followup', 'Confirmed', 'Feedback']:
             status = 'Needs Followup'
 
         if not all([customer_name, mobile, followup_date]):
