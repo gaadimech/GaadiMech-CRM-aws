@@ -167,9 +167,9 @@
                                 <th>Followup Date</th>
                                 <th>Status</th>
                                 <th>Remarks</th>
-                                <th>Created At</th>
+                                <th>Created Date</th>
                                 {% if current_user.is_admin %}
-                                    <th>Modified At</th>
+                                    <th>Modified Date</th>
                                     <th>Created By</th>
                                 {% endif %}
                                 <th>Car Registration</th>
@@ -185,16 +185,16 @@
                                             <a href="javascript:void(0);" onclick="copyToDialer('{{ followup.mobile }}')" 
                                                class="text-decoration-none">{{ followup.mobile }}</a>
                                         </td>
-                                        <td>{{ followup.followup_date.strftime('%Y-%m-%d') }}</td>
+                                        <td>{{ followup.followup_date.strftime('%d-%b-%Y') }}</td>
                                         <td>
                                             <span class="badge {% if followup.status == 'Confirmed' %}bg-success{% elif followup.status == 'Did Not Pick Up' %}bg-danger{% else %}bg-warning{% endif %}">
                                                 {{ followup.status }}
                                             </span>
                                         </td>
                                         <td>{{ followup.remarks }}</td>
-                                        <td>{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                        <td>{{ (followup.created_at - timedelta(hours=5, minutes=30)).strftime('%d-%b-%Y %I:%M%p') }}</td>
                                         {% if current_user.is_admin %}
-                                            <td>{{ followup.modified_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                            <td>{{ (followup.modified_at - timedelta(hours=5, minutes=30)).strftime('%d-%b-%Y %I:%M%p') }}</td>
                                             <td>{{ followup.creator.name }}</td>
                                         {% endif %}
                                         <td>{{ followup.car_registration or '' }}</td>

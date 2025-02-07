@@ -1,16 +1,17 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
 import os
 from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address   
-from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from flask_migrate import Migrate
+from pytz import timezone
+import pytz
 
 
 
@@ -47,6 +48,9 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
+# Get IST timezone
+ist = timezone('Asia/Kolkata')
+
 # Database Models
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -70,8 +74,8 @@ class Lead(db.Model):
     followup_date = db.Column(db.DateTime, nullable=False)
     remarks = db.Column(db.Text)
     status = db.Column(db.String(20), nullable=False, default='Needs Followup')
-    created_at = db.Column(db.DateTime, default=datetime.now())
-    modified_at = db.Column(db.DateTime, default=datetime.now(), onupdate=datetime.now())
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(ist))
+    modified_at = db.Column(db.DateTime, default=lambda: datetime.now(ist), onupdate=lambda: datetime.now(ist))
     creator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
     # Update the constraint to include new status values
@@ -197,8 +201,13 @@ def add_lead():
         followup_date = request.form.get('followup_date')
         remarks = request.form.get('remarks')
         status = request.form.get('status')
+
         if not status or status not in ['Did Not Pick Up', 'Needs Followup', 'Confirmed', 'Open', 'Completed', 'Feedback']:
             status = 'Needs Followup'
+
+        # Convert followup_date to IST
+        followup_date = datetime.strptime(followup_date, '%Y-%m-%d')
+        followup_date = ist.localize(followup_date)
 
         if not all([customer_name, mobile, followup_date]):
             flash('All required fields must be filled', 'error')
@@ -208,8 +217,6 @@ def add_lead():
             flash('Mobile number must be either 10 or 12 digits', 'error')
             return redirect(url_for('index'))
 
-        followup_date = datetime.strptime(followup_date, '%Y-%m-%d')
-
         new_lead = Lead(
             customer_name=customer_name,
             mobile=mobile,
@@ -217,7 +224,9 @@ def add_lead():
             followup_date=followup_date,
             remarks=remarks,
             status=status,
-            creator_id=current_user.id
+            creator_id=current_user.id,
+            created_at=datetime.now(ist),
+            modified_at=datetime.now(ist)
         )
         
         db.session.add(new_lead)
@@ -227,7 +236,7 @@ def add_lead():
     except Exception as e:
         db.session.rollback()
         flash('Error adding lead. Please try again.', 'error')
-        print(f"Error adding lead: {str(e)}")  # Log the error
+        print(f"Error adding lead: {str(e)}")
     
     return redirect(url_for('index'))
 
@@ -276,16 +285,26 @@ def followups():
         if mobile:
             query = query.filter(Lead.mobile.ilike(f'%{mobile}%'))
         
-        # Order by created date
+        # Convert to IST timezone
         followups = query.order_by(Lead.created_at.desc()).all()
+        
+        # Ensure all datetime objects are timezone-aware
+        for followup in followups:
+            if followup.created_at.tzinfo is None:
+                followup.created_at = pytz.utc.localize(followup.created_at)
+            if followup.modified_at.tzinfo is None:
+                followup.modified_at = pytz.utc.localize(followup.modified_at)
+            if followup.followup_date.tzinfo is None:
+                followup.followup_date = pytz.utc.localize(followup.followup_date)
         
         return render_template('followups.html', 
                              followups=followups, 
                              team_members=team_members,
-                             selected_member_id=selected_member_id)
+                             selected_member_id=selected_member_id,
+                             timedelta=timedelta)  # Pass timedelta to template
     except Exception as e:
         flash('Error loading followups. Please try again.', 'error')
-        print(f"Error loading followups: {str(e)}")  # Log the error
+        print(f"Error loading followups: {str(e)}")
         return redirect(url_for('index'))
 
 @app.route('/edit_lead/<int:lead_id>', methods=['GET', 'POST'])
@@ -302,10 +321,15 @@ def edit_lead(lead_id):
             lead.customer_name = request.form['customer_name']
             lead.mobile = request.form['mobile']
             lead.car_registration = request.form['car_registration']
-            lead.followup_date = datetime.strptime(request.form['followup_date'], '%Y-%m-%d')
+            
+            # Convert followup_date to IST
+            followup_date = datetime.strptime(request.form['followup_date'], '%Y-%m-%d')
+            lead.followup_date = ist.localize(followup_date)
+            
             lead.remarks = request.form['remarks']
             lead.status = request.form['status']
-            lead.modified_at = datetime.now()
+            lead.modified_at = datetime.now(ist)
+            
             db.session.commit()
             flash('Lead updated successfully!', 'success')
             return redirect(url_for('followups'))
@@ -314,7 +338,7 @@ def edit_lead(lead_id):
     except Exception as e:
         db.session.rollback()
         flash('Error updating lead. Please try again.', 'error')
-        print(f"Error updating lead: {str(e)}")  # Log the error
+        print(f"Error updating lead: {str(e)}")
         return redirect(url_for('followups'))
 
 @app.route('/delete_lead/<int:lead_id>', methods=['POST'])
