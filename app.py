@@ -240,42 +240,43 @@ def followups():
         date = request.args.get('date', '')
         created_date = request.args.get('created_date', '')
         modified_date = request.args.get('modified_date', '')
-        car_registration = request.args.get('car_registration')
+        car_registration = request.args.get('car_registration', '')
+        mobile = request.args.get('mobile', '')  # Get mobile number from query params
+        status_filter = request.args.get('status', '')
         
         query = Lead.query
 
-        # Status filter
-        status_filter = request.args.get('status', '')
-        if status_filter:
-            query = query.filter(Lead.status == status_filter)
-        
         # User-based filtering
         if current_user.is_admin:
             if selected_member_id:
                 query = query.filter(Lead.creator_id == selected_member_id)
         else:
             query = query.filter(Lead.creator_id == current_user.id)
-        
-        # Followup date filter
+
+        # Apply all filters if they exist
+        if status_filter:
+            query = query.filter(Lead.status == status_filter)
+            
         if date:
             selected_date = datetime.strptime(date, '%Y-%m-%d')
             query = query.filter(db.func.date(Lead.followup_date) == selected_date.date())
         
-        # Created date filter
         if created_date:
             selected_created_date = datetime.strptime(created_date, '%Y-%m-%d')
             query = query.filter(db.func.date(Lead.created_at) == selected_created_date.date())
 
-        # Modified date filter (only for admin)
         if current_user.is_admin and modified_date:
             selected_modified_date = datetime.strptime(modified_date, '%Y-%m-%d')
             query = query.filter(db.func.date(Lead.modified_at) == selected_modified_date.date())
         
-        # Car registration filter
         if car_registration:
             query = query.filter(Lead.car_registration.ilike(f'%{car_registration}%'))
+            
+        # Add mobile number filter
+        if mobile:
+            query = query.filter(Lead.mobile.ilike(f'%{mobile}%'))
         
-        # Default sorting by latest created_at
+        # Order by created date
         followups = query.order_by(Lead.created_at.desc()).all()
         
         return render_template('followups.html', 

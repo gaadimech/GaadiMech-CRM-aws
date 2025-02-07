@@ -50,33 +50,31 @@
         {% endwith %}
 
         <!-- Search Card -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white">
+    <div class="card mb-4">
+        <div class="card-header">
             <h5 class="card-title mb-0">Search Followups</h5>
         </div>
         <div class="card-body">
-            <form method="get" action="{{ url_for('followups') }}">
+            <form method="GET" action="{{ url_for('followups') }}">
                 <div class="row">
-                    {% if current_user.is_admin %}
                     <div class="col-md-4">
                         <div class="mb-3">
-                            <label for="team_member_id" class="form-label">Team Member</label>
-                            <select class="form-select" id="team_member_id" name="team_member_id">
+                            <label for="team_member" class="form-label">Team Member</label>
+                            <select class="form-select" id="team_member" name="team_member_id">
                                 <option value="">All Team Members</option>
                                 {% for member in team_members %}
-                                    <option value="{{ member.id }}" {% if selected_member_id|string == member.id|string %}selected{% endif %}>
-                                        {{ member.name }}
-                                    </option>
+                                <option value="{{ member.id }}" {% if selected_member_id|string == member.id|string %}selected{% endif %}>
+                                    {{ member.name }}
+                                </option>
                                 {% endfor %}
                             </select>
                         </div>
                     </div>
-                    {% endif %}
-                    
+
                     <div class="col-md-4">
                         <div class="mb-3">
-                            <label for="date" class="form-label">Followup Date</label>
-                            <input type="date" class="form-control" id="date" name="date" 
+                            <label for="followup_date" class="form-label">Followup Date</label>
+                            <input type="date" class="form-control" id="followup_date" name="date" 
                                    value="{{ request.args.get('date', '') }}">
                         </div>
                     </div>
@@ -89,15 +87,6 @@
                         </div>
                     </div>
 
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label for="car_registration" class="form-label">Car Registration Number</label>
-                            <input type="text" class="form-control" id="car_registration" name="car_registration" 
-                                   value="{{ request.args.get('car_registration', '') }}"
-                                   placeholder="Enter registration number">
-                        </div>
-                    </div>
-
                     {% if current_user.is_admin %}
                     <div class="col-md-4">
                         <div class="mb-3">
@@ -107,6 +96,24 @@
                         </div>
                     </div>
                     {% endif %}
+
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="car_registration" class="form-label">Car Registration Number</label>
+                            <input type="text" class="form-control" id="car_registration" name="car_registration" 
+                                   value="{{ request.args.get('car_registration', '') }}"
+                                   placeholder="Enter registration number">
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="mobile" class="form-label">Mobile Number</label>
+                            <input type="text" class="form-control" id="mobile" name="mobile" 
+                                   value="{{ request.args.get('mobile', '') }}"
+                                   placeholder="Enter mobile number">
+                        </div>
+                    </div>
 
                     <div class="col-md-4">
                         <div class="mb-3">
