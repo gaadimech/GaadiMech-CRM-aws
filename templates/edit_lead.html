@@ -79,6 +79,16 @@
                     </div>
 
                     <div class="mb-3">
+                        <label for="car_registration" class="form-label">Car Registration Number</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="car_registration" 
+                               name="car_registration" 
+                               value="{{ lead.car_registration or '' }}">
+                        <div class="form-text">Optional: Enter vehicle registration number</div>
+                    </div>
+
+                    <div class="mb-3">
                         <label for="followup_date" class="form-label">Followup Date</label>
                         <input type="date" 
                                class="form-control" 
@@ -99,6 +109,15 @@
                             </option>
                             <option value="Confirmed" {% if lead.status == 'Confirmed' %}selected{% endif %}>
                                 Confirmed
+                            </option>
+                            <option value="Open" {% if lead.status == 'Open' %}selected{% endif %}>
+                                Open
+                            </option>
+                            <option value="Completed" {% if lead.status == 'Completed' %}selected{% endif %}>
+                                Completed
+                            </option>
+                            <option value="Feedback" {% if lead.status == 'Feedback' %}selected{% endif %}>
+                                Feedback
                             </option>
                         </select>
                     </div>

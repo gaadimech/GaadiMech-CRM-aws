@@ -10,6 +10,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address   
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from flask_migrate import Migrate
 
 
 
@@ -32,6 +33,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize database and login manager
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -64,12 +66,21 @@ class Lead(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     customer_name = db.Column(db.String(100), nullable=False)
     mobile = db.Column(db.String(12), nullable=False)
+    car_registration = db.Column(db.String(20), nullable=True)
     followup_date = db.Column(db.DateTime, nullable=False)
     remarks = db.Column(db.Text)
     status = db.Column(db.String(20), nullable=False, default='Needs Followup')
     created_at = db.Column(db.DateTime, default=datetime.now())
     modified_at = db.Column(db.DateTime, default=datetime.now(), onupdate=datetime.now())
     creator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+    # Update the constraint to include new status values
+    __table_args__ = (
+        db.CheckConstraint(
+            status.in_(['Did Not Pick Up', 'Needs Followup', 'Confirmed', 'Open', 'Completed', 'Feedback']),
+            name='valid_status'
+        ),
+    )
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -182,10 +193,11 @@ def add_lead():
     try:
         customer_name = request.form.get('customer_name')
         mobile = request.form.get('mobile')
+        car_registration = request.form.get('car_registration')
         followup_date = request.form.get('followup_date')
         remarks = request.form.get('remarks')
         status = request.form.get('status')
-        if not status or status not in ['Did Not Pick Up', 'Needs Followup', 'Confirmed', 'Feedback']:
+        if not status or status not in ['Did Not Pick Up', 'Needs Followup', 'Confirmed', 'Open', 'Completed', 'Feedback']:
             status = 'Needs Followup'
 
         if not all([customer_name, mobile, followup_date]):
@@ -201,6 +213,7 @@ def add_lead():
         new_lead = Lead(
             customer_name=customer_name,
             mobile=mobile,
+            car_registration=car_registration,
             followup_date=followup_date,
             remarks=remarks,
             status=status,
@@ -227,6 +240,7 @@ def followups():
         date = request.args.get('date', '')
         created_date = request.args.get('created_date', '')
         modified_date = request.args.get('modified_date', '')
+        car_registration = request.args.get('car_registration')
         
         query = Lead.query
 
@@ -246,9 +260,8 @@ def followups():
         if date:
             selected_date = datetime.strptime(date, '%Y-%m-%d')
             query = query.filter(db.func.date(Lead.followup_date) == selected_date.date())
-
         
-        # Created date filter (new addition)
+        # Created date filter
         if created_date:
             selected_created_date = datetime.strptime(created_date, '%Y-%m-%d')
             query = query.filter(db.func.date(Lead.created_at) == selected_created_date.date())
@@ -257,6 +270,10 @@ def followups():
         if current_user.is_admin and modified_date:
             selected_modified_date = datetime.strptime(modified_date, '%Y-%m-%d')
             query = query.filter(db.func.date(Lead.modified_at) == selected_modified_date.date())
+        
+        # Car registration filter
+        if car_registration:
+            query = query.filter(Lead.car_registration.ilike(f'%{car_registration}%'))
         
         # Default sorting by latest created_at
         followups = query.order_by(Lead.created_at.desc()).all()
@@ -283,6 +300,7 @@ def edit_lead(lead_id):
         if request.method == 'POST':
             lead.customer_name = request.form['customer_name']
             lead.mobile = request.form['mobile']
+            lead.car_registration = request.form['car_registration']
             lead.followup_date = datetime.strptime(request.form['followup_date'], '%Y-%m-%d')
             lead.remarks = request.form['remarks']
             lead.status = request.form['status']

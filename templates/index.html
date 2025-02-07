@@ -61,6 +61,12 @@
                     </div>
 
                     <div class="mb-3">
+                        <label for="car_registration" class="form-label">Car Registration Number</label>
+                        <input type="text" class="form-control" id="car_registration" name="car_registration">
+                        <div class="form-text">Optional: Enter vehicle registration number</div>
+                    </div>
+
+                    <div class="mb-3">
                         <label for="followup_date" class="form-label">Followup Date</label>
                         <input type="date" class="form-control" id="followup_date" name="followup_date" required>
                     </div>
@@ -71,6 +77,9 @@
                             <option value="Did Not Pick Up">Did Not Pick Up</option>
                             <option value="Needs Followup" selected>Needs Followup</option>
                             <option value="Confirmed">Confirmed</option>
+                            <option value="Open">Open</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Feedback">Feedback</option>
                         </select>
                     </div>
 

@@ -89,6 +89,15 @@
                         </div>
                     </div>
 
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="car_registration" class="form-label">Car Registration Number</label>
+                            <input type="text" class="form-control" id="car_registration" name="car_registration" 
+                                   value="{{ request.args.get('car_registration', '') }}"
+                                   placeholder="Enter registration number">
+                        </div>
+                    </div>
+
                     {% if current_user.is_admin %}
                     <div class="col-md-4">
                         <div class="mb-3">
@@ -104,9 +113,12 @@
                             <label for="status" class="form-label">Status</label>
                             <select class="form-select" id="status" name="status">
                                 <option value="">All Status</option>
-                                <option value="Did Not Pick Up" {% if request.args.get('status') == 'Did Not Pick Up' %}selected{% endif %}>Did Not Pick Up</option>
-                                <option value="Needs Followup" {% if request.args.get('status') == 'Needs Followup' %}selected{% endif %}>Needs Followup</option>
-                                <option value="Confirmed" {% if request.args.get('status') == 'Confirmed' %}selected{% endif %}>Confirmed</option>
+                                <option value="Did Not Pick Up">Did Not Pick Up</option>
+                                <option value="Needs Followup">Needs Followup</option>
+                                <option value="Confirmed">Confirmed</option>
+                                <option value="Open">Open</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Feedback">Feedback</option>
                             </select>
                         </div>
                     </div>
@@ -153,6 +165,7 @@
                                     <th>Modified At</th>
                                     <th>Created By</th>
                                 {% endif %}
+                                <th>Car Registration</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -177,6 +190,7 @@
                                             <td>{{ followup.modified_at.strftime('%Y-%m-%d %H:%M') }}</td>
                                             <td>{{ followup.creator.name }}</td>
                                         {% endif %}
+                                        <td>{{ followup.car_registration or '' }}</td>
                                         <td>
                                             <div class="btn-group" role="group">
                                                 <a href="javascript:void(0);" 
