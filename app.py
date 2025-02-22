@@ -264,6 +264,8 @@ def followups():
         
         query = Lead.query
 
+        ist = pytz.timezone('Asia/Kolkata')
+
         # User-based filtering
         if current_user.is_admin:
             if selected_member_id:
@@ -276,8 +278,18 @@ def followups():
             query = query.filter(Lead.status == status_filter)
             
         if date:
-            selected_date = datetime.strptime(date, '%Y-%m-%d')
-            query = query.filter(db.func.date(Lead.followup_date) == selected_date.date())
+            start_date = datetime.strptime(date, '%Y-%m-%d')
+            start_date = ist.localize(start_date)  # Add IST timezone
+            end_date = start_date + timedelta(days=1)  # Next day
+            
+            # Convert to UTC for database query
+            start_date_utc = start_date.astimezone(pytz.UTC)
+            end_date_utc = end_date.astimezone(pytz.UTC)
+            
+            query = query.filter(
+                Lead.followup_date >= start_date_utc,
+                Lead.followup_date < end_date_utc
+            )
         
         if created_date:
             selected_created_date = datetime.strptime(created_date, '%Y-%m-%d')
