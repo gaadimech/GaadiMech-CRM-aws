@@ -360,6 +360,7 @@ def edit_lead(lead_id):
             flash('Lead updated successfully!', 'success')
             return redirect(url_for('followups'))
         
+        lead.followup_date = utc_to_ist(lead.followup_date)
         return render_template('edit_lead.html', lead=lead)
     except Exception as e:
         db.session.rollback()
