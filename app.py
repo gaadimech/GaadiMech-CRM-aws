@@ -190,6 +190,14 @@ def index():
     users = User.query.all()
     return render_template('index.html', users=users)
 
+def utc_to_ist(utc_dt):
+    if utc_dt is None:
+        return None
+    if utc_dt.tzinfo is None:
+        utc_dt = pytz.UTC.localize(utc_dt)
+    ist = pytz.timezone('Asia/Kolkata')
+    return utc_dt.astimezone(ist)
+
 @app.route('/add_lead', methods=['POST'])
 @login_required
 @limiter.limit("30 per minute")
@@ -198,16 +206,17 @@ def add_lead():
         customer_name = request.form.get('customer_name')
         mobile = request.form.get('mobile')
         car_registration = request.form.get('car_registration')
-        followup_date = request.form.get('followup_date')
+        # followup_date = request.form.get('followup_date')
         remarks = request.form.get('remarks')
         status = request.form.get('status')
 
         if not status or status not in ['Did Not Pick Up', 'Needs Followup', 'Confirmed', 'Open', 'Completed', 'Feedback']:
             status = 'Needs Followup'
 
-        # Convert followup_date to IST
-        followup_date = datetime.strptime(followup_date, '%Y-%m-%d')
+        followup_date = datetime.strptime(request.form.get('followup_date'), '%Y-%m-%d')
+        ist = pytz.timezone('Asia/Kolkata')
         followup_date = ist.localize(followup_date)
+        followup_date_utc = followup_date.astimezone(pytz.UTC)
 
         if not all([customer_name, mobile, followup_date]):
             flash('All required fields must be filled', 'error')
@@ -287,15 +296,20 @@ def followups():
         
         # Convert to IST timezone
         followups = query.order_by(Lead.created_at.desc()).all()
-        
-        # Ensure all datetime objects are timezone-aware
+
         for followup in followups:
-            if followup.created_at.tzinfo is None:
-                followup.created_at = pytz.utc.localize(followup.created_at)
-            if followup.modified_at.tzinfo is None:
-                followup.modified_at = pytz.utc.localize(followup.modified_at)
-            if followup.followup_date.tzinfo is None:
-                followup.followup_date = pytz.utc.localize(followup.followup_date)
+            followup.created_at = utc_to_ist(followup.created_at)
+            followup.modified_at = utc_to_ist(followup.modified_at)
+            followup.followup_date = utc_to_ist(followup.followup_date)
+        
+        # # Ensure all datetime objects are timezone-aware
+        # for followup in followups:
+        #     if followup.created_at.tzinfo is None:
+        #         followup.created_at = pytz.utc.localize(followup.created_at)
+        #     if followup.modified_at.tzinfo is None:
+        #         followup.modified_at = pytz.utc.localize(followup.modified_at)
+        #     if followup.followup_date.tzinfo is None:
+        #         followup.followup_date = pytz.utc.localize(followup.followup_date)
         
         return render_template('followups.html', 
                              followups=followups, 
