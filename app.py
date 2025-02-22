@@ -110,13 +110,25 @@ def login():
             if user:
                 if user.check_password(password):
                     login_user(user, remember=True)
-                    response = make_response(redirect(url_for('index')))
-                    response.set_cookie('session', 
-                                     value=request.cookies.get('session'),
-                                     secure=True,
-                                     httponly=True,
-                                     samesite='Lax',
-                                     max_age=timedelta(hours=24))
+                    print(f"Password check completed")  # Debug statement
+                    # Get next page from args or default to index
+                    next_page = request.args.get('next')
+                    if not next_page or not next_page.startswith('/'):
+                        next_page = url_for('index')
+                    
+                    # Create response with redirect
+                    print(f"Creating response")  # Debug statement
+                    response = make_response(redirect(next_page))
+                    # Set secure cookie if using HTTPS
+                    if request.is_secure:
+                        response.set_cookie(
+                            'session',
+                            value=request.cookies.get('session', ''),
+                            secure=True,
+                            httponly=True,
+                            samesite='Lax',
+                            max_age=86400  # 24 hours in seconds
+                        )
                     
                     # Get next page from args or default to index
                     next_page = request.args.get('next')
