@@ -192,9 +192,9 @@
                                             </span>
                                         </td>
                                         <td>{{ followup.remarks }}</td>
-                                        <td>{{ (followup.created_at - timedelta(hours=5, minutes=30)).strftime('%d-%b-%Y %I:%M%p') }}</td>
+                                        <td>{{ followup.created_at.strftime('%d-%b-%Y %I:%M %p') }}</td>
                                         {% if current_user.is_admin %}
-                                            <td>{{ (followup.modified_at - timedelta(hours=5, minutes=30)).strftime('%d-%b-%Y %I:%M%p') }}</td>
+                                            <td>{{ followup.modified_at.strftime('%d-%b-%Y %I:%M %p') }}</td>
                                             <td>{{ followup.creator.name }}</td>
                                         {% endif %}
                                         <td>{{ followup.car_registration or '' }}</td>
