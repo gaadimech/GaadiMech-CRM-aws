@@ -1,11 +1,26 @@
+# Flask and core dependencies
 Flask==2.3.3
-Flask-SQLAlchemy==3.1.1
-Flask-Login==0.6.2
-psycopg[binary]>=3.2.8
-python-dotenv==1.0.0
-gunicorn==21.2.0
-Werkzeug==2.3.7
+Flask-SQLAlchemy==3.0.5
+Flask-Login==0.6.3
+Flask-Migrate==4.0.5
 Flask-Limiter==3.5.0
-limits==3.6.0
-Flask-Migrate==4.0.0
+
+# Database drivers for Supabase (PostgreSQL) - Python 3.13 compatible
+psycopg[binary]>=3.2.9
+SQLAlchemy>=2.0.25
+
+# Security and environment
+python-dotenv==1.0.0
+Werkzeug==2.3.7
+
+# Timezone handling
 pytz==2023.3.post1
+
+# Scheduler for background tasks
+APScheduler==3.10.4
+
+# Production server (optional)
+gunicorn==21.2.0
+
+# Additional utilities
+requests==2.31.0

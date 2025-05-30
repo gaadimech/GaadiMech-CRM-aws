@@ -24,16 +24,37 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'gaadimech123')  # Provide a default secret key
 
 # Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres.qcvfmiqzkfhinxlhknnd:gaadimech123@aws-0-ap-south-1.pooler.supabase.com:6543/postgres")
-if DATABASE_URL is None:
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///crm.db'
-else:
-    # Handle Render.com's Postgres URL format
-    if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+# Get DATABASE_URL from environment variable (Supabase connection string)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Fallback Supabase URL if not set in environment
+if not DATABASE_URL:
+    # Replace these with your actual Supabase credentials
+    SUPABASE_HOST = os.getenv("SUPABASE_HOST", "aws-0-ap-south-1.pooler.supabase.com")
+    SUPABASE_DB = os.getenv("SUPABASE_DB", "postgres")
+    SUPABASE_USER = os.getenv("SUPABASE_USER", "postgres.qcvfmiqzkfhinxlhknnd")
+    SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD", "gaadimech123")
+    SUPABASE_PORT = os.getenv("SUPABASE_PORT", "6543")
+    
+    DATABASE_URL = f"postgresql://{SUPABASE_USER}:{SUPABASE_PASSWORD}@{SUPABASE_HOST}:{SUPABASE_PORT}/{SUPABASE_DB}"
+
+# Ensure we're using postgresql:// format (not postgres://)
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Additional Supabase optimized settings
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 10,
+    'pool_recycle': 300,
+    'pool_pre_ping': True,
+    'connect_args': {
+        'sslmode': 'require',
+        'connect_timeout': 10
+    }
+}
 
 # Initialize database and login manager
 db = SQLAlchemy(app)
@@ -156,11 +177,12 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',
     REMEMBER_COOKIE_SECURE=app.config.get('PREFERRED_URL_SCHEME') == 'https',
     REMEMBER_COOKIE_HTTPONLY=True,
-    REMEMBER_COOKIE_DURATION=timedelta(hours=24)
+    REMEMBER_COOKIE_DURATION=timedelta(hours=24),
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=24)
 )
 
-# Update login manager configuration 
-login_manager.session_protection = "strong"
+# Update login manager configuration for mobile compatibility
+login_manager.session_protection = "basic"  # Changed from "strong" to "basic" for mobile compatibility
 login_manager.refresh_view = "login"
 login_manager.needs_refresh_message = "Please login again to confirm your identity"
 login_manager.needs_refresh_message_category = "info"
@@ -692,7 +714,8 @@ def dashboard():
             'followup_efficiency': followup_efficiency,
             'initial_followups_count': initial_followups_count,
             'completion_rate': completion_rate,
-            'completed_followups': completed_followups
+            'completed_followups': completed_followups,
+            'USER_MOBILE_MAPPING': USER_MOBILE_MAPPING  # Add this for template
         }
         
         return render_template('dashboard.html', **template_data)
@@ -886,6 +909,73 @@ def get_user_followup_numbers(user_id):
     except Exception as e:
         print(f"Error getting user followup numbers: {e}")
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
+
+@app.route('/test_db')
+def test_database():
+    """Test database connection and show configuration status"""
+    try:
+        # Test the database connection
+        result = db.session.execute('SELECT version()').fetchone()
+        db_version = result[0] if result else 'Unknown'
+        
+        # Get table count
+        table_count = db.session.execute("""
+            SELECT COUNT(*) 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+        """).fetchone()[0]
+        
+        # Test data queries
+        user_count = User.query.count()
+        lead_count = Lead.query.count()
+        
+        return f"""
+        <h2>🎉 Supabase Database Connection Successful!</h2>
+        <h3>Database Info:</h3>
+        <ul>
+            <li><strong>Database Version:</strong> {db_version}</li>
+            <li><strong>Tables in Database:</strong> {table_count}</li>
+            <li><strong>Users:</strong> {user_count}</li>
+            <li><strong>Leads:</strong> {lead_count}</li>
+        </ul>
+        
+        <h3>Connection Details:</h3>
+        <ul>
+            <li><strong>Database URL:</strong> {app.config['SQLALCHEMY_DATABASE_URI'][:50]}...</li>
+            <li><strong>Pool Size:</strong> {app.config.get('SQLALCHEMY_ENGINE_OPTIONS', {}).get('pool_size', 'Default')}</li>
+            <li><strong>SSL Mode:</strong> Required (Supabase)</li>
+        </ul>
+        
+        <h3>Available Tables:</h3>
+        <ul>
+            <li>✅ Users table</li>
+            <li>✅ Leads table</li>
+            <li>✅ Daily Followup Count table</li>
+        </ul>
+        
+        <p><a href="/dashboard">← Back to Dashboard</a></p>
+        """
+    except Exception as e:
+        return f"""
+        <h2>❌ Database Connection Failed</h2>
+        <p><strong>Error:</strong> {str(e)}</p>
+        
+        <h3>Troubleshooting:</h3>
+        <ol>
+            <li>Check your Supabase credentials in environment variables</li>
+            <li>Ensure your Supabase project is active</li>
+            <li>Verify network connectivity</li>
+            <li>Check if database tables exist</li>
+        </ol>
+        
+        <h3>Current Configuration:</h3>
+        <ul>
+            <li><strong>Database URL:</strong> {app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50]}...</li>
+            <li><strong>Environment:</strong> {os.getenv('FLASK_ENV', 'development')}</li>
+        </ul>
+        
+        <p><a href="/init_db">Initialize Database</a> | <a href="/dashboard">Dashboard</a></p>
+        """
 
 # Error handlers
 @app.errorhandler(404)
