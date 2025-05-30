@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
 import os
@@ -270,10 +270,14 @@ def get_initial_followup_count(user_id, date):
         return daily_count.initial_count
     else:
         # If no record exists, return current count and create record
+        # Create start and end datetime objects properly
+        start_datetime = datetime.combine(date, time.min)
+        end_datetime = datetime.combine(date + timedelta(days=1), time.min)
+        
         current_count = Lead.query.filter(
             Lead.creator_id == user_id,
-            Lead.followup_date >= datetime.combine(date, datetime.min.time()),
-            Lead.followup_date < datetime.combine(date + timedelta(days=1), datetime.min.time())
+            Lead.followup_date >= start_datetime,
+            Lead.followup_date < end_datetime
         ).count()
         
         update_daily_followup_count(user_id, date, current_count)
@@ -286,7 +290,7 @@ def capture_daily_snapshot():
         
         # Get today's date in IST
         today = datetime.now(ist).date()
-        today_start = ist.localize(datetime.combine(today, datetime.min.time()))
+        today_start = ist.localize(datetime.combine(today, time.min))
         tomorrow_start = today_start + timedelta(days=1)
         
         # Convert to UTC for database queries
