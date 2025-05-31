@@ -224,8 +224,17 @@ def get_optimized_dashboard_data(current_user, selected_date, selected_user_id, 
         
         # Calculate completion rate
         pending_count = len(todays_followups)
-        completed_followups = max(0, initial_followups_count - pending_count)
-        completion_rate = round((completed_followups / initial_followups_count * 100), 1) if initial_followups_count > 0 else 0
+        
+        # If there are more current followups than initial assignment,
+        # it means new leads were added during the day
+        if pending_count > initial_followups_count:
+            # Completion rate based on how many were completed from the initial assignment
+            completed_followups = 0  # None from initial assignment completed yet
+            completion_rate = 0.0
+        else:
+            # Standard completion rate calculation
+            completed_followups = max(0, initial_followups_count - pending_count)
+            completion_rate = round((completed_followups / initial_followups_count * 100), 1) if initial_followups_count > 0 else 0
         
         # Mobile number mapping for team members
         USER_MOBILE_MAPPING = {

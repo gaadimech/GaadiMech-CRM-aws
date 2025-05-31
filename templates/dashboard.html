@@ -585,14 +585,14 @@
 
             <!-- Key Metrics -->
             <div class="row mb-3 metric-cards">
-                <div class="col-xl-4 col-md-6 mb-3">
+                <div class="col-xl-3 col-md-6 mb-3">
                     <div class="card metric-card dashboard-card">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
                                 <div>
                                     <h6 class="text-light">Today's Followups</h6>
-                                    <h3 class="text-white">{{ initial_followups_count }}</h3>
-                                    <small class="text-light opacity-75">{{ todays_followups|length }} still pending</small>
+                                    <h3 class="text-white">{{ todays_followups|length }}</h3>
+                                    <small class="text-light opacity-75">{{ todays_followups|length }} currently pending</small>
                                 </div>
                                 <div class="align-self-center">
                                     <i class="fas fa-calendar-day fa-2x opacity-75"></i>
@@ -601,7 +601,23 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-xl-4 col-md-6 mb-3">
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card metric-card-info dashboard-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="text-light">Initial Assignment</h6>
+                                    <h3 class="text-white">{{ initial_followups_count }}</h3>
+                                    <small class="text-light opacity-75">Fixed at 5:00 AM IST</small>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-clipboard-list fa-2x opacity-75"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-3">
                     <div class="card metric-card-success dashboard-card">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
@@ -617,7 +633,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-xl-4 col-md-6 mb-3">
+                <div class="col-xl-3 col-md-6 mb-3">
                     <div class="card metric-card-warning dashboard-card">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
