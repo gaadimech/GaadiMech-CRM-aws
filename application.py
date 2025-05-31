@@ -1085,6 +1085,113 @@ def health_check():
             'environment': os.getenv('FLASK_ENV', 'development')
         }), 500
 
+@application.route('/create_users', methods=['GET'])
+def create_users():
+    """Create specific users: admin and surakshit"""
+    try:
+        with application.app_context():
+            # Create all tables first
+            db.create_all()
+            
+            users_created = []
+            
+            # Create admin user (with admin privileges)
+            admin = User.query.filter_by(username='admin').first()
+            if not admin:
+                admin = User(
+                    username='admin',
+                    name='Administrator',
+                    is_admin=True
+                )
+                admin.set_password('admin123')
+                db.session.add(admin)
+                users_created.append('admin (Administrator)')
+            else:
+                # Update existing admin user to ensure correct password
+                admin.set_password('admin123')
+                admin.is_admin = True
+                users_created.append('admin (updated)')
+            
+            # Create surakshit user
+            surakshit = User.query.filter_by(username='surakshit').first()
+            if not surakshit:
+                surakshit = User(
+                    username='surakshit',
+                    name='Surakshit Soni',
+                    is_admin=False
+                )
+                surakshit.set_password('surakshit123')
+                db.session.add(surakshit)
+                users_created.append('surakshit (Surakshit Soni)')
+            else:
+                # Update existing surakshit user to ensure correct password
+                surakshit.set_password('surakshit123')
+                users_created.append('surakshit (updated)')
+            
+            db.session.commit()
+            
+            # Get all users to display
+            all_users = User.query.all()
+            
+            return f"""
+            <h2>✅ Users Created/Updated Successfully!</h2>
+            
+            <h3>Created/Updated Users:</h3>
+            <ul>
+                {''.join([f'<li>{user}</li>' for user in users_created])}
+            </ul>
+            
+            <h3>All Users in Database:</h3>
+            <table border="1" style="border-collapse: collapse; width: 100%;">
+                <tr>
+                    <th style="padding: 8px;">ID</th>
+                    <th style="padding: 8px;">Username</th>
+                    <th style="padding: 8px;">Name</th>
+                    <th style="padding: 8px;">Admin</th>
+                </tr>
+                {''.join([f'''
+                <tr>
+                    <td style="padding: 8px;">{user.id}</td>
+                    <td style="padding: 8px;"><strong>{user.username}</strong></td>
+                    <td style="padding: 8px;">{user.name}</td>
+                    <td style="padding: 8px;">{"✅ Yes" if user.is_admin else "❌ No"}</td>
+                </tr>
+                ''' for user in all_users])}
+            </table>
+            
+            <h3>Login Credentials:</h3>
+            <div style="background-color: #f0f0f0; padding: 15px; border-radius: 5px;">
+                <p><strong>👤 Admin User:</strong><br>
+                Username: <code>admin</code><br>
+                Password: <code>admin123</code><br>
+                Role: Administrator (Full Access)</p>
+                
+                <p><strong>👤 Surakshit User:</strong><br>
+                Username: <code>surakshit</code><br>
+                Password: <code>surakshit123</code><br>
+                Role: Regular User</p>
+            </div>
+            
+            <h3>🔗 Quick Actions:</h3>
+            <p>
+                <a href="/login" style="background-color: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">🔑 Login Page</a>
+                <a href="/dashboard" style="background-color: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; margin-left: 10px;">📊 Dashboard</a>
+                <a href="/db_inspect" style="background-color: #17a2b8; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; margin-left: 10px;">🔍 Database Inspector</a>
+            </p>
+            
+            <p><em>You can now login with either of these accounts!</em></p>
+            """, 200
+            
+    except Exception as e:
+        db.session.rollback()
+        error_message = f"Error creating users: {str(e)}"
+        print(error_message)  # Log the error
+        return f"""
+        <h2>❌ Error Creating Users</h2>
+        <p><strong>Error:</strong> {error_message}</p>
+        <p><a href="/init_db">Try Database Initialization</a></p>
+        """, 500
+
 # Error handlers
 @application.errorhandler(404)
 def not_found_error(error):
