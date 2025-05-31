@@ -490,11 +490,8 @@ def followups():
         if mobile:
             query = query.filter(Lead.mobile.ilike(f'%{mobile}%'))
         
-        # Use pagination instead of loading all results
-        pagination = query.order_by(Lead.created_at.desc()).paginate(
-            page=page, per_page=per_page, error_out=False
-        )
-        followups = pagination.items
+        # Remove pagination and get all matching results
+        followups = query.order_by(Lead.created_at.desc()).all()
 
         # Convert to IST timezone efficiently
         for followup in followups:
@@ -506,7 +503,6 @@ def followups():
                              followups=followups, 
                              team_members=team_members,
                              selected_member_id=selected_member_id,
-                             pagination=pagination,
                              timedelta=timedelta)
     except Exception as e:
         flash('Error loading followups. Please try again.', 'error')
