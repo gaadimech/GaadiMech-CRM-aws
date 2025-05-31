@@ -685,9 +685,7 @@ def trigger_manual_snapshot():
 
 @application.route('/init_db', methods=['GET'])
 def initialize_database():
-    if not os.getenv('ALLOW_DB_INIT', '').lower() == 'False':
-        return "Database initialization is disabled", 403
-    
+    # Allow database initialization in production for initial setup
     try:
         with application.app_context():
             # Create all tables
@@ -842,6 +840,25 @@ def test_database():
         
         <p><a href="/init_db">Initialize Database</a> | <a href="/dashboard">Dashboard</a></p>
         """
+
+@application.route('/health')
+def health_check():
+    """Simple health check endpoint"""
+    try:
+        # Test database connection
+        db.session.execute(db.text('SELECT 1')).fetchone()
+        return jsonify({
+            'status': 'healthy',
+            'database': 'connected',
+            'environment': os.getenv('FLASK_ENV', 'development')
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'error': str(e),
+            'environment': os.getenv('FLASK_ENV', 'development')
+        }), 500
 
 # Error handlers
 @application.errorhandler(404)
