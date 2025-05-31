@@ -1,37 +1,64 @@
 import psycopg2
+from psycopg2 import OperationalError
 import os
-from urllib.parse import urlparse
 
-def test_database_connection(url):
+# AWS RDS connection string - Replace with your actual credentials
+RDS_CONNECTION_STRING = "postgresql://postgres:GaadiMech2024!@gaadimech-crm-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com:5432/crmportal"
+
+def test_database_connection():
     try:
-        "postgresql://postgres.qcvfmiqzkfhinxlhknnd:GaadiMech123@aws-0-ap-south-1.pooler.supabase.com:6543/postgres"
-        result = urlparse(url)
-        username = result.username
-        password = result.password
-        database = result.path[1:]
-        hostname = result.hostname
-        port = result.port
-
-        # Create connection
-        connection = psycopg2.connect(
-            database=database,
-            user=username,
-            password=password,
-            host=hostname,
-            port=port
-        )
+        print("🔗 Testing AWS RDS PostgreSQL connection...")
+        print("=" * 50)
         
-        print("Database connection successful!")
+        # Use environment variable or fallback to RDS string
+        DATABASE_URL = os.getenv("DATABASE_URL", RDS_CONNECTION_STRING)
+        
+        # Remove any postgres:// prefix and replace with postgresql://
+        if DATABASE_URL.startswith("postgres://"):
+            DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        
+        print(f"Connecting to: {DATABASE_URL[:30]}...")
+        
+        # Attempt connection
+        connection = psycopg2.connect(DATABASE_URL)
+        cursor = connection.cursor()
+        
+        # Test query
+        cursor.execute("SELECT version();")
+        db_version = cursor.fetchone()
+        
+        print("✅ Connection successful!")
+        print(f"📊 Database version: {db_version[0]}")
+        
+        # Test table existence
+        cursor.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            ORDER BY table_name;
+        """)
+        
+        tables = cursor.fetchall()
+        print(f"📋 Tables found: {len(tables)}")
+        
+        for table in tables:
+            print(f"   - {table[0]}")
+        
+        cursor.close()
         connection.close()
-        return True
+        
+        print("\n🎉 AWS RDS database test completed successfully!")
+        
+    except OperationalError as e:
+        print(f"❌ Connection failed: {e}")
+        print("\n🔧 Troubleshooting:")
+        print("1. Check your RDS instance is running")
+        print("2. Verify security group allows your IP")
+        print("3. Confirm database credentials")
+        print("4. Check if database 'crmportal' exists")
+        
     except Exception as e:
-        print(f"Connection error: {str(e)}")
-        return False
+        print(f"❌ Unexpected error: {e}")
 
-# Test your connection string
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres.qcvfmiqzkfhinxlhknnd:GaadiMech123@aws-0-ap-south-1.pooler.supabase.com:6543/postgres")
-print(f"Connecting to database: {DATABASE_URL}")
-if DATABASE_URL:
-    test_database_connection(DATABASE_URL)
-else:
-    print("No DATABASE_URL environment variable found")
+if __name__ == "__main__":
+    test_database_connection()

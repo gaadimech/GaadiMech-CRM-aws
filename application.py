@@ -794,7 +794,7 @@ def test_database():
         lead_count = Lead.query.count()
         
         return f"""
-        <h2>🎉 Supabase Database Connection Successful!</h2>
+        <h2>🎉 AWS RDS Database Connection Successful!</h2>
         <h3>Database Info:</h3>
         <ul>
             <li><strong>Database Version:</strong> {db_version}</li>
@@ -807,7 +807,7 @@ def test_database():
         <ul>
             <li><strong>Database URL:</strong> {application.config['SQLALCHEMY_DATABASE_URI'][:50]}...</li>
             <li><strong>Pool Size:</strong> {application.config.get('SQLALCHEMY_ENGINE_OPTIONS', {}).get('pool_size', 'Default')}</li>
-            <li><strong>SSL Mode:</strong> Required (Supabase)</li>
+            <li><strong>SSL Mode:</strong> Not Required (AWS RDS)</li>
         </ul>
         
         <h3>Available Tables:</h3>
@@ -826,9 +826,9 @@ def test_database():
         
         <h3>Troubleshooting:</h3>
         <ol>
-            <li>Check your Supabase credentials in environment variables</li>
-            <li>Ensure your Supabase project is active</li>
-            <li>Verify network connectivity</li>
+            <li>Check your AWS RDS credentials in environment variables</li>
+            <li>Ensure your RDS instance is running</li>
+            <li>Verify network connectivity and security groups</li>
             <li>Check if database tables exist</li>
         </ol>
         

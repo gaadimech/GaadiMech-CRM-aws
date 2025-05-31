@@ -13,19 +13,19 @@ from sqlalchemy import create_engine, text
 
 def get_database_url():
     """Get the database URL using the same logic as the main Flask app."""
-    # Get DATABASE_URL from environment variable (Supabase connection string)
+    # Get DATABASE_URL from environment variable (AWS RDS connection string)
     DATABASE_URL = os.getenv("DATABASE_URL")
 
-    # Fallback Supabase URL if not set in environment
+    # AWS RDS fallback configuration
     if not DATABASE_URL:
-        # Replace these with your actual Supabase credentials
-        SUPABASE_HOST = os.getenv("SUPABASE_HOST", "aws-0-ap-south-1.pooler.supabase.com")
-        SUPABASE_DB = os.getenv("SUPABASE_DB", "postgres")
-        SUPABASE_USER = os.getenv("SUPABASE_USER", "postgres.qcvfmiqzkfhinxlhknnd")
-        SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD", "gaadimech123")
-        SUPABASE_PORT = os.getenv("SUPABASE_PORT", "6543")
+        # Replace these with your actual AWS RDS credentials
+        RDS_HOST = os.getenv("RDS_HOST", "gaadimech-crm-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com")
+        RDS_DB = os.getenv("RDS_DB", "crmportal")
+        RDS_USER = os.getenv("RDS_USER", "postgres")
+        RDS_PASSWORD = os.getenv("RDS_PASSWORD", "GaadiMech2024!")
+        RDS_PORT = os.getenv("RDS_PORT", "5432")
         
-        DATABASE_URL = f"postgresql://{SUPABASE_USER}:{SUPABASE_PASSWORD}@{SUPABASE_HOST}:{SUPABASE_PORT}/{SUPABASE_DB}"
+        DATABASE_URL = f"postgresql://{RDS_USER}:{RDS_PASSWORD}@{RDS_HOST}:{RDS_PORT}/{RDS_DB}"
 
     # Ensure we're using postgresql:// format (not postgres://)
     if DATABASE_URL.startswith("postgres://"):
@@ -290,7 +290,7 @@ def main():
         print(f"❌ Error: {e}")
         print("\nPlease ensure:")
         print("1. Your .env file contains the correct database credentials")
-        print("2. You have network access to the Supabase database")
+        print("2. You have network access to the AWS RDS database")
         print("3. The database tables exist and are accessible")
 
 if __name__ == "__main__":

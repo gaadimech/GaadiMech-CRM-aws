@@ -159,13 +159,16 @@ export FLASK_APP=application.py
 flask db upgrade
 ```
 
-#### 4.2 Migrate Data from Supabase (if needed)
-```bash
-# Export from Supabase
-pg_dump "postgresql://postgres.qcvfmiqzkfhinxlhknnd:gaadimech123@aws-0-ap-south-1.pooler.supabase.com:6543/postgres" > backup.sql
+#### 4.2 Data Migration (if needed)
 
-# Import to RDS
-psql "postgresql://postgres:password@your-rds-endpoint.amazonaws.com:5432/crmportal" < backup.sql
+If you have existing data, you can migrate it using standard PostgreSQL tools:
+
+```bash
+# Export from old database
+pg_dump "your_old_database_url" > backup.sql
+
+# Import to AWS RDS
+psql "postgresql://postgres:GaadiMech2024!@gaadimech-crm-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com:5432/crmportal" < backup.sql
 ```
 
 ### Phase 5: Domain and SSL Setup

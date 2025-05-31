@@ -74,7 +74,7 @@ pip install -r requirements.txt
 ```bash
 # Create a .env file with:
 SECRET_KEY=your_secret_key_here
-DATABASE_URL=your_supabase_database_url
+DATABASE_URL=your_aws_rds_database_url
 ```
 
 5. Initialize the database:

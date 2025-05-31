@@ -11,29 +11,23 @@ from datetime import datetime, date, timedelta
 from sqlalchemy import create_engine, text
 from collections import defaultdict
 
-def get_database_url():
-    """Get the database URL using the same logic as the main Flask app."""
-    DATABASE_URL = os.getenv("DATABASE_URL")
+# Database configuration for AWS RDS
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-    if not DATABASE_URL:
-        SUPABASE_HOST = os.getenv("SUPABASE_HOST", "aws-0-ap-south-1.pooler.supabase.com")
-        SUPABASE_DB = os.getenv("SUPABASE_DB", "postgres")
-        SUPABASE_USER = os.getenv("SUPABASE_USER", "postgres.qcvfmiqzkfhinxlhknnd")
-        SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD", "gaadimech123")
-        SUPABASE_PORT = os.getenv("SUPABASE_PORT", "6543")
-        
-        DATABASE_URL = f"postgresql://{SUPABASE_USER}:{SUPABASE_PASSWORD}@{SUPABASE_HOST}:{SUPABASE_PORT}/{SUPABASE_DB}"
-
-    if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+# AWS RDS fallback configuration
+if not DATABASE_URL:
+    RDS_HOST = os.getenv("RDS_HOST", "gaadimech-crm-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com")
+    RDS_DB = os.getenv("RDS_DB", "crmportal")
+    RDS_USER = os.getenv("RDS_USER", "postgres")
+    RDS_PASSWORD = os.getenv("RDS_PASSWORD", "GaadiMech2024!")
+    RDS_PORT = os.getenv("RDS_PORT", "5432")
     
-    return DATABASE_URL
+    DATABASE_URL = f"postgresql://{RDS_USER}:{RDS_PASSWORD}@{RDS_HOST}:{RDS_PORT}/{RDS_DB}"
 
 def get_user_ids():
     """Get user IDs for Hemlata and Sneha."""
     try:
-        database_url = get_database_url()
-        engine = create_engine(database_url, connect_args={'sslmode': 'require'})
+        engine = create_engine(DATABASE_URL)
         
         with engine.connect() as connection:
             # Get user IDs
@@ -63,8 +57,7 @@ def get_user_ids():
 def get_missed_followups(cutoff_date='2024-05-31'):
     """Get all missed follow-ups that need to be redistributed."""
     try:
-        database_url = get_database_url()
-        engine = create_engine(database_url, connect_args={'sslmode': 'require'})
+        engine = create_engine(DATABASE_URL)
         
         # Query to get all missed follow-ups
         query = text("""
@@ -219,8 +212,7 @@ def apply_redistribution(redistribution_plan, dry_run=True):
         if not dry_run:
             # Apply database updates
             try:
-                database_url = get_database_url()
-                engine = create_engine(database_url, connect_args={'sslmode': 'require'})
+                engine = create_engine(DATABASE_URL)
                 
                 with engine.connect() as connection:
                     # Begin transaction

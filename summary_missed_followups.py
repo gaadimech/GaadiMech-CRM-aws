@@ -10,29 +10,23 @@ from datetime import datetime, date
 from collections import defaultdict
 from sqlalchemy import create_engine, text
 
-def get_database_url():
-    """Get the database URL using the same logic as the main Flask app."""
-    DATABASE_URL = os.getenv("DATABASE_URL")
+# Database configuration for AWS RDS
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-    if not DATABASE_URL:
-        SUPABASE_HOST = os.getenv("SUPABASE_HOST", "aws-0-ap-south-1.pooler.supabase.com")
-        SUPABASE_DB = os.getenv("SUPABASE_DB", "postgres")
-        SUPABASE_USER = os.getenv("SUPABASE_USER", "postgres.qcvfmiqzkfhinxlhknnd")
-        SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD", "gaadimech123")
-        SUPABASE_PORT = os.getenv("SUPABASE_PORT", "6543")
-        
-        DATABASE_URL = f"postgresql://{SUPABASE_USER}:{SUPABASE_PASSWORD}@{SUPABASE_HOST}:{SUPABASE_PORT}/{SUPABASE_DB}"
-
-    if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+# AWS RDS fallback configuration
+if not DATABASE_URL:
+    RDS_HOST = os.getenv("RDS_HOST", "gaadimech-crm-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com")
+    RDS_DB = os.getenv("RDS_DB", "crmportal")
+    RDS_USER = os.getenv("RDS_USER", "postgres")
+    RDS_PASSWORD = os.getenv("RDS_PASSWORD", "GaadiMech2024!")
+    RDS_PORT = os.getenv("RDS_PORT", "5432")
     
-    return DATABASE_URL
+    DATABASE_URL = f"postgresql://{RDS_USER}:{RDS_PASSWORD}@{RDS_HOST}:{RDS_PORT}/{RDS_DB}"
 
 def get_missed_followups_summary(cutoff_date='2024-05-31'):
     """Get a summary of missed follow-ups grouped by date."""
     try:
-        database_url = get_database_url()
-        engine = create_engine(database_url, connect_args={'sslmode': 'require'})
+        engine = create_engine(DATABASE_URL)
         
         # Query to get missed follow-ups summary grouped by date
         query = text("""
