@@ -841,6 +841,231 @@ def test_database():
         <p><a href="/init_db">Initialize Database</a> | <a href="/dashboard">Dashboard</a></p>
         """
 
+@application.route('/db_inspect')
+@login_required
+def inspect_database():
+    """Comprehensive database inspection endpoint"""
+    if not current_user.is_admin:
+        return "Admin access required", 403
+    
+    try:
+        inspect_data = {
+            'database_info': {},
+            'tables': {},
+            'sample_data': {},
+            'schema_info': {}
+        }
+        
+        # Database version and basic info
+        result = db.session.execute(db.text('SELECT version()')).fetchone()
+        inspect_data['database_info']['version'] = result[0] if result else 'Unknown'
+        
+        # Current database name
+        result = db.session.execute(db.text('SELECT current_database()')).fetchone()
+        inspect_data['database_info']['database_name'] = result[0] if result else 'Unknown'
+        
+        # Table information
+        tables_query = db.text("""
+            SELECT table_name, table_type 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """)
+        tables = db.session.execute(tables_query).fetchall()
+        
+        for table in tables:
+            table_name = table[0]
+            inspect_data['tables'][table_name] = {
+                'type': table[1],
+                'columns': [],
+                'row_count': 0
+            }
+            
+            # Get column information
+            columns_query = db.text("""
+                SELECT column_name, data_type, is_nullable, column_default
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' AND table_name = :table_name
+                ORDER BY ordinal_position
+            """)
+            columns = db.session.execute(columns_query, {'table_name': table_name}).fetchall()
+            
+            for col in columns:
+                inspect_data['tables'][table_name]['columns'].append({
+                    'name': col[0],
+                    'type': col[1],
+                    'nullable': col[2],
+                    'default': col[3]
+                })
+            
+            # Get row count
+            try:
+                count_query = db.text(f'SELECT COUNT(*) FROM "{table_name}"')
+                count_result = db.session.execute(count_query).fetchone()
+                inspect_data['tables'][table_name]['row_count'] = count_result[0] if count_result else 0
+            except:
+                inspect_data['tables'][table_name]['row_count'] = 'Error counting'
+        
+        # Sample data from main tables
+        main_tables = ['user', 'lead', 'dailyfollowupcount']
+        for table_name in main_tables:
+            if table_name in inspect_data['tables']:
+                try:
+                    sample_query = db.text(f'SELECT * FROM "{table_name}" LIMIT 5')
+                    sample_results = db.session.execute(sample_query).fetchall()
+                    
+                    # Convert to list of dictionaries
+                    if sample_results:
+                        columns = [col['name'] for col in inspect_data['tables'][table_name]['columns']]
+                        inspect_data['sample_data'][table_name] = []
+                        for row in sample_results:
+                            row_dict = {}
+                            for i, col in enumerate(columns):
+                                row_dict[col] = str(row[i]) if row[i] is not None else 'NULL'
+                            inspect_data['sample_data'][table_name].append(row_dict)
+                except Exception as e:
+                    inspect_data['sample_data'][table_name] = f'Error: {str(e)}'
+        
+        # Database size and statistics
+        try:
+            size_query = db.text("""
+                SELECT pg_size_pretty(pg_database_size(current_database())) as size
+            """)
+            size_result = db.session.execute(size_query).fetchone()
+            inspect_data['database_info']['size'] = size_result[0] if size_result else 'Unknown'
+        except:
+            inspect_data['database_info']['size'] = 'Unknown'
+        
+        # Format as HTML for easy viewing
+        html_output = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Database Inspection - GaadiMech CRM</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                .section {{ margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }}
+                .table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
+                .table th, .table td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                .table th {{ background-color: #f2f2f2; }}
+                .code {{ background-color: #f5f5f5; padding: 10px; border-radius: 3px; }}
+                .error {{ color: red; }}
+                .success {{ color: green; }}
+            </style>
+        </head>
+        <body>
+            <h1>🔍 Database Inspection - GaadiMech CRM</h1>
+            
+            <div class="section">
+                <h2>📊 Database Information</h2>
+                <div class="code">
+                    <strong>Database:</strong> {inspect_data['database_info'].get('database_name', 'Unknown')}<br>
+                    <strong>Version:</strong> {inspect_data['database_info'].get('version', 'Unknown')}<br>
+                    <strong>Size:</strong> {inspect_data['database_info'].get('size', 'Unknown')}<br>
+                    <strong>Connection URL:</strong> {application.config['SQLALCHEMY_DATABASE_URI'][:50]}...
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>🗂️ Tables Overview</h2>
+                <table class="table">
+                    <tr>
+                        <th>Table Name</th>
+                        <th>Type</th>
+                        <th>Columns</th>
+                        <th>Row Count</th>
+                    </tr>
+        """
+        
+        for table_name, table_info in inspect_data['tables'].items():
+            html_output += f"""
+                    <tr>
+                        <td><strong>{table_name}</strong></td>
+                        <td>{table_info['type']}</td>
+                        <td>{len(table_info['columns'])}</td>
+                        <td>{table_info['row_count']}</td>
+                    </tr>
+            """
+        
+        html_output += """
+                </table>
+            </div>
+        """
+        
+        # Table schemas
+        for table_name, table_info in inspect_data['tables'].items():
+            html_output += f"""
+            <div class="section">
+                <h3>📋 Table: {table_name}</h3>
+                <table class="table">
+                    <tr>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>Nullable</th>
+                        <th>Default</th>
+                    </tr>
+            """
+            
+            for col in table_info['columns']:
+                html_output += f"""
+                    <tr>
+                        <td><strong>{col['name']}</strong></td>
+                        <td>{col['type']}</td>
+                        <td>{col['nullable']}</td>
+                        <td>{col['default'] or 'None'}</td>
+                    </tr>
+                """
+            
+            html_output += "</table>"
+            
+            # Sample data
+            if table_name in inspect_data['sample_data']:
+                sample_data = inspect_data['sample_data'][table_name]
+                if isinstance(sample_data, list) and sample_data:
+                    html_output += f"""
+                    <h4>📄 Sample Data (First 5 rows):</h4>
+                    <table class="table">
+                        <tr>
+                    """
+                    # Headers
+                    for key in sample_data[0].keys():
+                        html_output += f"<th>{key}</th>"
+                    html_output += "</tr>"
+                    
+                    # Data rows
+                    for row in sample_data:
+                        html_output += "<tr>"
+                        for value in row.values():
+                            html_output += f"<td>{value}</td>"
+                        html_output += "</tr>"
+                    html_output += "</table>"
+                else:
+                    html_output += f"<p><em>No sample data or error: {sample_data}</em></p>"
+            
+            html_output += "</div>"
+        
+        html_output += """
+            <div class="section">
+                <h2>🔗 Quick Links</h2>
+                <p>
+                    <a href="/dashboard">← Back to Dashboard</a> |
+                    <a href="/test_db">Test DB Connection</a> |
+                    <a href="/health">Health Check</a>
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return html_output
+        
+    except Exception as e:
+        return f"""
+        <h2>❌ Database Inspection Failed</h2>
+        <p><strong>Error:</strong> {str(e)}</p>
+        <p><a href="/dashboard">← Back to Dashboard</a></p>
+        """
+
 @application.route('/health')
 def health_check():
     """Simple health check endpoint"""
