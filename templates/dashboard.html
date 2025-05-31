@@ -805,8 +805,16 @@
                                                 </td>
                                                 <td>
                                                     <strong>{{ performance.user.name }}</strong>
+                                                    {% if performance.new_additions > 0 %}
+                                                    <br><small class="text-info">+{{ performance.new_additions }} added today</small>
+                                                    {% endif %}
                                                 </td>
-                                                <td>{{ performance.initial_followups }}</td>
+                                                <td>
+                                                    {{ performance.initial_followups }}
+                                                    {% if performance.new_additions > 0 %}
+                                                    <br><small class="text-muted">({{ performance.original_assignment }} original)</small>
+                                                    {% endif %}
+                                                </td>
                                                 <td>
                                                     <span class="text-success fw-bold">{{ performance.worked_followups }}</span>
                                                 </td>
@@ -826,7 +834,7 @@
                                                     <span class="badge bg-info">{{ performance.leads_created }}</span>
                                                 </td>
                                                 <td>
-                                                    <button class="btn btn-sm btn-success" onclick="openWhatsApp('{{ USER_MOBILE_MAPPING.get(performance.user.name, '') }}')">
+                                                    <button class="btn btn-sm btn-success" onclick="sendFollowupsToWhatsApp({{ performance.user.id }}, '{{ performance.user.name }}')">
                                                         <i class="fab fa-whatsapp"></i>
                                                     </button>
                                                 </td>
@@ -844,8 +852,14 @@
                                         <div class="d-flex justify-content-between align-items-start">
                                             <div>
                                                 <h6 class="mb-1">{{ performance.user.name }}</h6>
+                                                {% if performance.new_additions > 0 %}
+                                                <div class="small text-info mb-1">+{{ performance.new_additions }} added today</div>
+                                                {% endif %}
                                                 <div class="small text-muted mb-2">
                                                     <i class="fas fa-tasks me-1"></i>{{ performance.worked_followups }}/{{ performance.initial_followups }} completed
+                                                    {% if performance.new_additions > 0 %}
+                                                    <br><small class="text-muted">({{ performance.original_assignment }} originally assigned)</small>
+                                                    {% endif %}
                                                 </div>
                                                 <div class="progress mb-2" style="height: 8px;">
                                                     <div class="progress-bar bg-{% if performance.completion_rate >= 80 %}success{% elif performance.completion_rate >= 60 %}warning{% else %}danger{% endif %}" 
@@ -861,7 +875,7 @@
                                                     {{ performance.completion_rate }}%
                                                 </div>
                                                 <button class="btn btn-sm whatsapp-btn text-white" 
-                                                        onclick="openWhatsApp('{{ USER_MOBILE_MAPPING.get(performance.user.name, '') }}')">
+                                                        onclick="sendFollowupsToWhatsApp({{ performance.user.id }}, '{{ performance.user.name }}')">
                                                     <i class="fab fa-whatsapp"></i>
                                                 </button>
                                             </div>

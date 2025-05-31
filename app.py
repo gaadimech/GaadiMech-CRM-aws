@@ -658,10 +658,18 @@ def dashboard():
                 Lead.followup_date < next_day_utc
             ).count()
             
-            # Calculate worked upon (completed/rescheduled)
-            user_worked_count = max(0, user_initial_count - user_pending_count)
+            # Fix logic: If pending > initial, it means new followups were added during the day
+            # So we should use the current pending count as the effective "assigned" count
+            effective_assigned = max(user_initial_count, user_pending_count)
             
-            # Calculate user completion rate
+            # Calculate worked upon (completed/rescheduled)
+            # If current pending > initial assigned, it means no work was done yet (all new)
+            if user_pending_count > user_initial_count:
+                user_worked_count = 0  # No work done on today's assigned tasks
+            else:
+                user_worked_count = user_initial_count - user_pending_count
+            
+            # Calculate user completion rate based on original assignment
             user_completion_rate = round((user_worked_count / user_initial_count * 100), 1) if user_initial_count > 0 else 0
             
             # Get new leads created by this user today
@@ -678,13 +686,15 @@ def dashboard():
             
             user_performance_list.append({
                 'user': user,
-                'initial_followups': user_initial_count,
+                'initial_followups': effective_assigned,  # Show the higher number to reflect reality
                 'pending_followups': user_pending_count,
                 'worked_followups': user_worked_count,
                 'completion_rate': user_completion_rate,
                 'leads_created': user_leads_created,
                 'confirmed': confirmed_count,
-                'completed': completed_count
+                'completed': completed_count,
+                'original_assignment': user_initial_count,  # Keep track of original for reference
+                'new_additions': max(0, user_pending_count - user_initial_count)  # Track new additions
             })
         
         # Sort by completion rate (highest first), then by initial followups
