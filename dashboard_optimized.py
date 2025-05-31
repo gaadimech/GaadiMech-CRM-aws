@@ -10,6 +10,15 @@ from sqlalchemy import func, case, and_
 from flask import current_app
 import pytz
 
+def utc_to_ist(utc_dt):
+    """Convert UTC datetime to IST"""
+    if utc_dt is None:
+        return None
+    ist = pytz.timezone('Asia/Kolkata')
+    if utc_dt.tzinfo is None:
+        utc_dt = pytz.utc.localize(utc_dt)
+    return utc_dt.astimezone(ist)
+
 def get_optimized_dashboard_data(current_user, selected_date, selected_user_id, ist, db, User, Lead, get_initial_followup_count):
     """
     Optimized dashboard data fetching that reduces database queries from ~20+ to ~5-8 queries
@@ -59,6 +68,15 @@ def get_optimized_dashboard_data(current_user, selected_date, selected_user_id, 
         
         todays_followups = todays_followups_query.order_by(Lead.followup_date.asc()).all()
         
+        # Convert followups to IST for display
+        for followup in todays_followups:
+            if followup.followup_date:
+                followup.followup_date = utc_to_ist(followup.followup_date)
+            if followup.created_at:
+                followup.created_at = utc_to_ist(followup.created_at)
+            if followup.modified_at:
+                followup.modified_at = utc_to_ist(followup.modified_at)
+        
         # OPTIMIZED QUERY 2: Get daily leads count
         daily_leads_count_query = db.session.query(func.count(Lead.id)).filter(
             Lead.created_at >= target_date_utc,
@@ -99,12 +117,16 @@ def get_optimized_dashboard_data(current_user, selected_date, selected_user_id, 
         leads_with_followups = followup_efficiency_query.scalar() or 0
         followup_efficiency = (leads_with_followups / total_leads * 100) if total_leads > 0 else 0
         
+        # OPTIMIZED: Batch get initial followup counts for all users at once
+        user_ids = [user.id for user in users]
+        initial_counts_by_user = get_optimized_initial_followup_counts(
+            user_ids, target_date.date(), db, get_initial_followup_count
+        )
+        
         # OPTIMIZED QUERY 6: Get user performance data in bulk queries
         user_performance_list = []
         
         if users:
-            user_ids = [user.id for user in users]
-            
             # Bulk query for today's pending followups by user
             pending_followups_by_user = dict(
                 db.session.query(
@@ -146,8 +168,8 @@ def get_optimized_dashboard_data(current_user, selected_date, selected_user_id, 
             for user in users:
                 user_id = user.id
                 
-                # Get initial followup count (this might still require individual calls)
-                user_initial_count = get_initial_followup_count(user_id, target_date.date())
+                # Get initial followup count from batch result
+                user_initial_count = initial_counts_by_user.get(user_id, 0)
                 
                 # Get current pending count
                 user_pending_count = pending_followups_by_user.get(user_id, 0)
@@ -182,36 +204,34 @@ def get_optimized_dashboard_data(current_user, selected_date, selected_user_id, 
                     'new_additions': max(0, user_pending_count - user_initial_count)
                 })
         
-        # Sort by completion rate
+        # Sort by completion rate (highest first), then by initial followups
         user_performance_list.sort(key=lambda x: (x['completion_rate'], x['initial_followups']), reverse=True)
         
-        # Calculate aggregate metrics
+        # Calculate overall metrics using batch results
         if current_user.is_admin and selected_user_id:
+            # For admin viewing specific user
             try:
                 user_id = int(selected_user_id)
-                initial_followups_count = get_initial_followup_count(user_id, target_date.date())
+                initial_followups_count = initial_counts_by_user.get(user_id, len(todays_followups))
             except ValueError:
                 initial_followups_count = len(todays_followups)
         elif current_user.is_admin:
-            initial_followups_count = sum(
-                get_initial_followup_count(user.id, target_date.date()) for user in users
-            )
+            # For admin viewing all users
+            initial_followups_count = sum(initial_counts_by_user.values())
         else:
-            initial_followups_count = get_initial_followup_count(current_user.id, target_date.date())
+            # For regular user
+            initial_followups_count = initial_counts_by_user.get(current_user.id, 0)
         
+        # Calculate completion rate
         pending_count = len(todays_followups)
         completed_followups = max(0, initial_followups_count - pending_count)
         completion_rate = round((completed_followups / initial_followups_count * 100), 1) if initial_followups_count > 0 else 0
         
-        # Convert timezone for display
-        from app import utc_to_ist
-        for followup in todays_followups:
-            if followup.followup_date:
-                followup.followup_date = utc_to_ist(followup.followup_date)
-            if followup.created_at:
-                followup.created_at = utc_to_ist(followup.created_at)
-            if followup.modified_at:
-                followup.modified_at = utc_to_ist(followup.modified_at)
+        # Mobile number mapping for team members
+        USER_MOBILE_MAPPING = {
+            'Hemlata': '9672562111',
+            'Sneha': '+919672764111'
+        }
         
         return {
             'todays_followups': todays_followups,
@@ -225,7 +245,8 @@ def get_optimized_dashboard_data(current_user, selected_date, selected_user_id, 
             'followup_efficiency': followup_efficiency,
             'initial_followups_count': initial_followups_count,
             'completion_rate': completion_rate,
-            'completed_followups': completed_followups
+            'completed_followups': completed_followups,
+            'USER_MOBILE_MAPPING': USER_MOBILE_MAPPING
         }
         
     except Exception as e:
@@ -233,10 +254,13 @@ def get_optimized_dashboard_data(current_user, selected_date, selected_user_id, 
         raise e
 
 
-def get_optimized_initial_followup_counts(user_ids, date, db, DailyFollowupCount, Lead):
+def get_optimized_initial_followup_counts(user_ids, date, db, get_initial_followup_count):
     """
     Optimized function to get initial followup counts for multiple users at once
     """
+    # Import here to avoid circular imports
+    from app import DailyFollowupCount, Lead
+    
     # Try to get from cache table first
     daily_counts = db.session.query(DailyFollowupCount).filter(
         DailyFollowupCount.user_id.in_(user_ids),

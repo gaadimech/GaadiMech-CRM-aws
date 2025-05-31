@@ -63,6 +63,9 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# Simple in-memory cache for development (avoiding Flask-Caching complexity)
+dashboard_cache_store = {}
+
 print("Database connected")
 
 # Configure rate limiter
@@ -420,6 +423,10 @@ def followups():
         mobile = request.args.get('mobile', '')  # Get mobile number from query params
         status_filter = request.args.get('status', '')
         
+        # Add pagination for better performance with large datasets
+        page = request.args.get('page', 1, type=int)
+        per_page = 50  # Limit to 50 results per page
+
         query = Lead.query
 
         ist = pytz.timezone('Asia/Kolkata')
@@ -483,28 +490,24 @@ def followups():
         if mobile:
             query = query.filter(Lead.mobile.ilike(f'%{mobile}%'))
         
-        # Convert to IST timezone
-        followups = query.order_by(Lead.created_at.desc()).all()
+        # Use pagination instead of loading all results
+        pagination = query.order_by(Lead.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        followups = pagination.items
 
+        # Convert to IST timezone efficiently
         for followup in followups:
             followup.created_at = utc_to_ist(followup.created_at)
             followup.modified_at = utc_to_ist(followup.modified_at)
             followup.followup_date = utc_to_ist(followup.followup_date)
         
-        # # Ensure all datetime objects are timezone-aware
-        # for followup in followups:
-        #     if followup.created_at.tzinfo is None:
-        #         followup.created_at = pytz.utc.localize(followup.created_at)
-        #     if followup.modified_at.tzinfo is None:
-        #         followup.modified_at = pytz.utc.localize(followup.modified_at)
-        #     if followup.followup_date.tzinfo is None:
-        #         followup.followup_date = pytz.utc.localize(followup.followup_date)
-        
         return render_template('followups.html', 
                              followups=followups, 
                              team_members=team_members,
                              selected_member_id=selected_member_id,
-                             timedelta=timedelta)  # Pass timedelta to template
+                             pagination=pagination,
+                             timedelta=timedelta)
     except Exception as e:
         flash('Error loading followups. Please try again.', 'error')
         print(f"Error loading followups: {str(e)}")
@@ -570,167 +573,22 @@ def dashboard():
         selected_date = request.args.get('date', datetime.now(ist).strftime('%Y-%m-%d'))
         selected_user_id = request.args.get('user_id', '')
         
-        # Parse the selected date with better error handling
-        try:
-            target_date = datetime.strptime(selected_date, '%Y-%m-%d')
-            target_date = ist.localize(target_date)
-            next_day = target_date + timedelta(days=1)
-        except ValueError:
-            # If date parsing fails, use today
-            target_date = datetime.now(ist).replace(hour=0, minute=0, second=0, microsecond=0)
-            next_day = target_date + timedelta(days=1)
-            selected_date = target_date.strftime('%Y-%m-%d')
+        # Check cache first for performance
+        cached_data = dashboard_cache_store.get((current_user.id, selected_date, selected_user_id))
         
-        # Convert to UTC for database queries
-        target_date_utc = target_date.astimezone(pytz.UTC)
-        next_day_utc = next_day.astimezone(pytz.UTC)
+        if cached_data:
+            return render_template('dashboard.html', **cached_data)
         
-        # Get all users for admin or current user for regular users
-        if current_user.is_admin:
-            users = User.query.all()
-        else:
-            users = [current_user]
-            selected_user_id = str(current_user.id)
+        # Use optimized dashboard function for better performance
+        from dashboard_optimized import get_optimized_dashboard_data
         
-        # Base query setup
-        base_query = Lead.query
-        if selected_user_id and current_user.is_admin:
-            try:
-                base_query = base_query.filter(Lead.creator_id == int(selected_user_id))
-            except ValueError:
-                pass  # Invalid user_id, ignore filter
-        elif not current_user.is_admin:
-            base_query = base_query.filter(Lead.creator_id == current_user.id)
+        template_data = get_optimized_dashboard_data(
+            current_user, selected_date, selected_user_id, 
+            ist, db, User, Lead, get_initial_followup_count
+        )
         
-        # 1. Today's Followups (current pending ones)
-        todays_followups = base_query.filter(
-            Lead.followup_date >= target_date_utc,
-            Lead.followup_date < next_day_utc
-        ).order_by(Lead.followup_date.asc()).all()
-        
-        # 1.1. Calculate initial followups count for the selected date and user(s)
-        if current_user.is_admin and selected_user_id:
-            # For admin viewing specific user
-            try:
-                user_id = int(selected_user_id)
-                initial_followups_count = get_initial_followup_count(user_id, target_date.date())
-            except ValueError:
-                initial_followups_count = len(todays_followups)
-        elif current_user.is_admin:
-            # For admin viewing all users
-            initial_followups_count = 0
-            for user in users:
-                initial_followups_count += get_initial_followup_count(user.id, target_date.date())
-        else:
-            # For regular user
-            initial_followups_count = get_initial_followup_count(current_user.id, target_date.date())
-        
-        # 1.2. Calculate completion rate
-        pending_count = len(todays_followups)
-        completed_followups = max(0, initial_followups_count - pending_count)
-        completion_rate = round((completed_followups / initial_followups_count * 100), 1) if initial_followups_count > 0 else 0
-        
-        # Convert to IST for display (with safety checks)
-        for followup in todays_followups:
-            if followup.followup_date:
-                followup.followup_date = utc_to_ist(followup.followup_date)
-            if followup.created_at:
-                followup.created_at = utc_to_ist(followup.created_at)
-            if followup.modified_at:
-                followup.modified_at = utc_to_ist(followup.modified_at)
-        
-        # 2. Daily Performance Metrics
-        daily_leads = base_query.filter(
-            Lead.created_at >= target_date_utc,
-            Lead.created_at < next_day_utc
-        ).all()
-        
-        # 3. User performance (enhanced with completion tracking)
-        user_performance_list = []
-        for user in users:
-            # Get user's fixed initial count for today
-            user_initial_count = get_initial_followup_count(user.id, target_date.date())
-            
-            # Count current pending followups for this user
-            user_pending_count = base_query.filter(
-                Lead.creator_id == user.id,
-                Lead.followup_date >= target_date_utc,
-                Lead.followup_date < next_day_utc
-            ).count()
-            
-            # Fix logic: If pending > initial, it means new followups were added during the day
-            # So we should use the current pending count as the effective "assigned" count
-            effective_assigned = max(user_initial_count, user_pending_count)
-            
-            # Calculate worked upon (completed/rescheduled)
-            # If current pending > initial assigned, it means no work was done yet (all new)
-            if user_pending_count > user_initial_count:
-                user_worked_count = 0  # No work done on today's assigned tasks
-            else:
-                user_worked_count = user_initial_count - user_pending_count
-            
-            # Calculate user completion rate based on original assignment
-            user_completion_rate = round((user_worked_count / user_initial_count * 100), 1) if user_initial_count > 0 else 0
-            
-            # Get new leads created by this user today
-            user_leads_created = Lead.query.filter(
-                Lead.creator_id == user.id,
-                Lead.created_at >= target_date_utc,
-                Lead.created_at < next_day_utc
-            ).count()
-            
-            # Count confirmed and completed statuses
-            user_all_leads = Lead.query.filter(Lead.creator_id == user.id).all()
-            confirmed_count = len([l for l in user_all_leads if l.status == 'Confirmed'])
-            completed_count = len([l for l in user_all_leads if l.status == 'Completed'])
-            
-            user_performance_list.append({
-                'user': user,
-                'initial_followups': effective_assigned,  # Show the higher number to reflect reality
-                'pending_followups': user_pending_count,
-                'worked_followups': user_worked_count,
-                'completion_rate': user_completion_rate,
-                'leads_created': user_leads_created,
-                'confirmed': confirmed_count,
-                'completed': completed_count,
-                'original_assignment': user_initial_count,  # Keep track of original for reference
-                'new_additions': max(0, user_pending_count - user_initial_count)  # Track new additions
-            })
-        
-        # Sort by completion rate (highest first), then by initial followups
-        user_performance_list.sort(key=lambda x: (x['completion_rate'], x['initial_followups']), reverse=True)
-        
-        # 4. Follow-up efficiency
-        total_leads = base_query.count()
-        leads_with_followups = base_query.filter(Lead.followup_date.isnot(None)).count()
-        followup_efficiency = (leads_with_followups / total_leads * 100) if total_leads > 0 else 0
-        
-        # 5. Status counts for Quick Stats
-        status_counts = {}
-        all_leads = base_query.all()
-        for lead in all_leads:
-            status_counts[lead.status] = status_counts.get(lead.status, 0) + 1
-        
-        # Ensure we have some data to prevent empty Quick Stats
-        if not status_counts:
-            status_counts = {'Needs Followup': 0}
-        
-        # Prepare template data with streamlined data
-        template_data = {
-            'todays_followups': todays_followups,
-            'daily_leads_count': len(daily_leads),
-            'user_performance': user_performance_list,
-            'status_counts': status_counts,
-            'users': users,
-            'selected_date': selected_date,
-            'selected_user_id': selected_user_id,
-            'total_leads': total_leads,
-            'followup_efficiency': followup_efficiency,
-            'initial_followups_count': initial_followups_count,
-            'completion_rate': completion_rate,
-            'completed_followups': completed_followups,
-            'USER_MOBILE_MAPPING': USER_MOBILE_MAPPING  # Add this for template
-        }
+        # Cache the results for 5 minutes
+        dashboard_cache_store[(current_user.id, selected_date, selected_user_id)] = template_data
         
         return render_template('dashboard.html', **template_data)
         
@@ -756,7 +614,8 @@ def dashboard():
             'followup_efficiency': 0,
             'initial_followups_count': 0,
             'completion_rate': 0,
-            'completed_followups': 0
+            'completed_followups': 0,
+            'USER_MOBILE_MAPPING': USER_MOBILE_MAPPING
         }
         
         return render_template('dashboard.html', **emergency_data)
@@ -928,16 +787,16 @@ def get_user_followup_numbers(user_id):
 def test_database():
     """Test database connection and show configuration status"""
     try:
-        # Test the database connection
-        result = db.session.execute('SELECT version()').fetchone()
+        # Test the database connection with proper SQLAlchemy syntax
+        result = db.session.execute(db.text('SELECT version()')).fetchone()
         db_version = result[0] if result else 'Unknown'
         
         # Get table count
-        table_count = db.session.execute("""
+        table_count = db.session.execute(db.text("""
             SELECT COUNT(*) 
             FROM information_schema.tables 
             WHERE table_schema = 'public'
-        """).fetchone()[0]
+        """)).fetchone()[0]
         
         # Test data queries
         user_count = User.query.count()
