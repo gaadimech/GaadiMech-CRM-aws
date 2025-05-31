@@ -29,7 +29,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # AWS RDS fallback configuration
 if not DATABASE_URL:
     RDS_HOST = os.getenv("RDS_HOST", "gaadimech-crm-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com")
-    RDS_DB = os.getenv("RDS_DB", "crmportal")
+    RDS_DB = os.getenv("RDS_DB", "postgres")
     RDS_USER = os.getenv("RDS_USER", "postgres")
     RDS_PASSWORD = os.getenv("RDS_PASSWORD", "GaadiMech2024!")
     RDS_PORT = os.getenv("RDS_PORT", "5432")
