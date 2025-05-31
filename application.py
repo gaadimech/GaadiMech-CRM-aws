@@ -21,7 +21,7 @@ import atexit
 load_dotenv()
 
 application = Flask(__name__)
-application.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'gaadimech123')  # Provide a default secret key
+application.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'GaadiMech2024!')  # Provide a default secret key
 
 # Database configuration for AWS RDS
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -29,7 +29,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # AWS RDS fallback configuration
 if not DATABASE_URL:
     RDS_HOST = os.getenv("RDS_HOST", "gaadimech-crm-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com")
-    RDS_DB = os.getenv("RDS_DB", "postgres")
+    RDS_DB = os.getenv("RDS_DB", "crmportal")
     RDS_USER = os.getenv("RDS_USER", "postgres")
     RDS_PASSWORD = os.getenv("RDS_PASSWORD", "GaadiMech2024!")
     RDS_PORT = os.getenv("RDS_PORT", "5432")
