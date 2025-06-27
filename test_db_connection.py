@@ -1,194 +1,87 @@
 #!/usr/bin/env python3
-import psycopg2
-import os
-from datetime import datetime
+"""
+Test script to verify database connection and show basic statistics
+"""
 
-# RDS connection details
-RDS_HOST = "gaadimech-crm-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com"
-RDS_USER = "postgres"
-RDS_PASSWORD = "GaadiMech2024!"
-RDS_PORT = 5432
-RDS_DB = "postgres"  # Using default postgres database
+import os
+import sys
+from datetime import datetime, timedelta
+
+# Set environment variables
+os.environ['DATABASE_URL'] = 'postgresql://crmadmin:GaadiMech2024!@crm-portal-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com:5432/crmportal'
+os.environ['SECRET_KEY'] = 'GaadiMech2024!'
 
 def test_connection():
-    """Test database connection and basic operations"""
+    """Test database connection and show statistics"""
     try:
-        print("🔗 Testing connection to AWS RDS PostgreSQL...")
-        print(f"Host: {RDS_HOST}")
-        print(f"Database: {RDS_DB}")
-        print(f"User: {RDS_USER}")
-        print("-" * 50)
+        from application import application, db, User, Lead, DailyFollowupCount
+        import pytz
         
-        # Connect to database
-        connection = psycopg2.connect(
-            host=RDS_HOST,
-            user=RDS_USER,
-            password=RDS_PASSWORD,
-            port=RDS_PORT,
-            database=RDS_DB
-        )
+        ist = pytz.timezone('Asia/Kolkata')
+        today = datetime.now(ist).date()
         
-        cursor = connection.cursor()
-        
-        # Test 1: Basic connection test
-        print("✅ Database connection successful!")
-        
-        # Test 2: Check database version
-        cursor.execute("SELECT version();")
-        version = cursor.fetchone()[0]
-        print(f"📊 PostgreSQL Version: {version.split(',')[0]}")
-        
-        # Test 3: Check current time
-        cursor.execute("SELECT NOW();")
-        current_time = cursor.fetchone()[0]
-        print(f"🕒 Database Time: {current_time}")
-        
-        # Test 4: List all databases
-        cursor.execute("SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname;")
-        databases = cursor.fetchall()
-        print(f"🗄️ Available Databases:")
-        for db in databases:
-            print(f"   - {db[0]}")
-        
-        # Test 5: Check if our application tables exist
-        cursor.execute("""
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_type = 'BASE TABLE'
-            ORDER BY table_name;
-        """)
-        tables = cursor.fetchall()
-        
-        if tables:
-            print(f"\n📋 Existing Tables in '{RDS_DB}' database:")
-            for table in tables:
-                print(f"   - {table[0]}")
-                
-                # Get row count for each table
-                try:
-                    cursor.execute(f"SELECT COUNT(*) FROM {table[0]};")
-                    count = cursor.fetchone()[0]
-                    print(f"     Rows: {count}")
-                except Exception as e:
-                    print(f"     Error counting rows: {e}")
-        else:
-            print(f"\n📋 No application tables found in '{RDS_DB}' database")
-            print("   This is expected if using the default postgres database")
-        
-        # Test 6: Check if crmportal database exists
-        cursor.execute("SELECT 1 FROM pg_database WHERE datname='crmportal';")
-        crmportal_exists = cursor.fetchone()
-        
-        if crmportal_exists:
-            print(f"\n🎯 'crmportal' database exists!")
+        with application.app_context():
+            print("🔍 Testing Database Connection...")
+            print("=" * 60)
             
-            # Connect to crmportal database to check its contents
-            try:
-                crm_connection = psycopg2.connect(
-                    host=RDS_HOST,
-                    user=RDS_USER,
-                    password=RDS_PASSWORD,
-                    port=RDS_PORT,
-                    database='crmportal'
-                )
-                crm_cursor = crm_connection.cursor()
-                
-                # Check tables in crmportal
-                crm_cursor.execute("""
-                    SELECT table_name 
-                    FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_type = 'BASE TABLE'
-                    ORDER BY table_name;
-                """)
-                crm_tables = crm_cursor.fetchall()
-                
-                if crm_tables:
-                    print(f"📋 Tables in 'crmportal' database:")
-                    for table in crm_tables:
-                        print(f"   - {table[0]}")
-                        
-                        # Get row count for each table
-                        try:
-                            crm_cursor.execute(f"SELECT COUNT(*) FROM {table[0]};")
-                            count = crm_cursor.fetchone()[0]
-                            print(f"     Rows: {count}")
-                            
-                            # Show sample data if table has data
-                            if count > 0:
-                                crm_cursor.execute(f"SELECT * FROM {table[0]} LIMIT 3;")
-                                samples = crm_cursor.fetchall()
-                                print(f"     Sample data: {samples[:1]}...")  # Show first row
-                        except Exception as e:
-                            print(f"     Error: {e}")
-                else:
-                    print(f"📋 No tables found in 'crmportal' database")
-                
-                crm_cursor.close()
-                crm_connection.close()
-                
-            except Exception as e:
-                print(f"❌ Error connecting to crmportal database: {e}")
-        else:
-            print(f"\n📋 'crmportal' database does not exist")
-        
-        # Test 7: Test a simple query
-        cursor.execute("SELECT 'Database test successful!' as message, CURRENT_TIMESTAMP as timestamp;")
-        result = cursor.fetchone()
-        print(f"\n🧪 Test Query Result:")
-        print(f"   Message: {result[0]}")
-        print(f"   Timestamp: {result[1]}")
-        
-        cursor.close()
-        connection.close()
-        
-        print(f"\n🎉 All database tests completed successfully!")
-        print(f"🔗 Connection URL: postgresql://{RDS_USER}:***@{RDS_HOST}:{RDS_PORT}/{RDS_DB}")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Database connection error: {str(e)}")
-        return False
-
-def test_web_health():
-    """Test the web application health endpoint"""
-    try:
-        import requests
-        
-        print(f"\n🌐 Testing Web Application Health...")
-        url = "https://gaadimech-crm-prod.eba-ftgmu9fp.ap-south-1.elasticbeanstalk.com/health"
-        
-        response = requests.get(url, timeout=10)
-        print(f"Status Code: {response.status_code}")
-        
-        if response.status_code == 200:
-            data = response.json()
-            print(f"Response: {data}")
-            print("✅ Web application health check passed!")
-        else:
-            print(f"❌ Health check failed with status {response.status_code}")
+            # Test basic connection
+            result = db.session.execute(db.text('SELECT version()')).fetchone()
+            db_version = result[0] if result else 'Unknown'
+            print(f"✅ Database Connected: {db_version[:50]}...")
             
-    except ImportError:
-        print("📝 Skipping web test (requests module not available)")
+            # Get basic counts
+            user_count = User.query.count()
+            total_leads = Lead.query.count()
+            
+            print(f"📊 Users: {user_count}")
+            print(f"📊 Total Leads: {total_leads}")
+            
+            # Get today's followup counts
+            today_start = ist.localize(datetime.combine(today, datetime.min.time()))
+            tomorrow_start = today_start + timedelta(days=1)
+            
+            today_start_utc = today_start.astimezone(pytz.UTC)
+            tomorrow_start_utc = tomorrow_start.astimezone(pytz.UTC)
+            
+            todays_followups = Lead.query.filter(
+                Lead.followup_date >= today_start_utc,
+                Lead.followup_date < tomorrow_start_utc
+            ).count()
+            
+            print(f"📅 Today's Followups: {todays_followups}")
+            
+            # Check if 5AM snapshot exists for today
+            snapshot_count = DailyFollowupCount.query.filter_by(date=today).count()
+            print(f"📸 5AM Snapshots for today: {snapshot_count}")
+            
+            if snapshot_count > 0:
+                snapshots = DailyFollowupCount.query.filter_by(date=today).all()
+                print("\n5AM Snapshot Details:")
+                for snapshot in snapshots:
+                    user = User.query.get(snapshot.user_id)
+                    print(f"  - {user.name if user else 'Unknown'}: {snapshot.initial_count} followups")
+            else:
+                print("⚠️  No 5AM snapshot found for today. Run: python trigger_5am_snapshot.py")
+            
+            # Show user list
+            users = User.query.all()
+            print(f"\n👥 Users:")
+            for user in users:
+                print(f"  - {user.name} ({'Admin' if user.is_admin else 'User'})")
+            
+            print("\n" + "=" * 60)
+            print("✅ Database connection test completed successfully!")
+            print("\nNext steps:")
+            print("1. python trigger_5am_snapshot.py  # Create today's snapshot")
+            print("2. python test_local_with_fixes.py  # Start local server")
+            
     except Exception as e:
-        print(f"❌ Web health test error: {e}")
+        print(f"❌ Database connection failed: {e}")
+        print("\nTroubleshooting:")
+        print("- Check if the RDS database is accessible")
+        print("- Verify database credentials")
+        print("- Ensure network connectivity")
+        sys.exit(1)
 
-if __name__ == "__main__":
-    print("🗄️ GaadiMech CRM - Database Connection Test")
-    print("=" * 60)
-    print(f"Test Date: {datetime.now()}")
-    print("=" * 60)
-    
-    # Test database connection
-    db_success = test_connection()
-    
-    # Test web application
-    test_web_health()
-    
-    print("=" * 60)
-    if db_success:
-        print("🎉 Overall Status: SUCCESS")
-    else:
-        print("❌ Overall Status: FAILED") 
+if __name__ == '__main__':
+    test_connection() 

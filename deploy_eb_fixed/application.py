@@ -306,6 +306,62 @@ def followups():
     # Simple redirect to dashboard for now since get_followups_data doesn't exist
     return redirect(url_for('dashboard'))
 
+@application.route('/api/dashboard/status-update', methods=['POST'])
+@login_required
+def update_lead_status():
+    try:
+        data = request.get_json()
+        lead_id = data.get('lead_id')
+        new_status = data.get('status')
+        
+        lead = Lead.query.get_or_404(lead_id)
+        
+        # Check permissions
+        if not current_user.is_admin and lead.creator_id != current_user.id:
+            return jsonify({'success': False, 'message': 'Permission denied'})
+        
+        lead.status = new_status
+        lead.modified_at = datetime.now(ist)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Status updated successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating status: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error updating status'})
+
+@application.route('/api/dashboard/quick-followup', methods=['POST'])
+@login_required
+def add_quick_followup():
+    try:
+        data = request.get_json()
+        lead_id = data.get('lead_id')
+        followup_date = data.get('followup_date')
+        remarks = data.get('remarks', '')
+        
+        lead = Lead.query.get_or_404(lead_id)
+        
+        # Check permissions
+        if not current_user.is_admin and lead.creator_id != current_user.id:
+            return jsonify({'success': False, 'message': 'Permission denied'})
+        
+        # Update followup date
+        followup_datetime = datetime.strptime(followup_date, '%Y-%m-%d')
+        lead.followup_date = ist.localize(followup_datetime)
+        if remarks:
+            lead.remarks = remarks
+        lead.modified_at = datetime.now(ist)
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Followup scheduled successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error scheduling followup: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error scheduling followup'})
+
 @application.errorhandler(404)
 def not_found_error(error):
     return render_template('error.html', error_message="Page not found"), 404
