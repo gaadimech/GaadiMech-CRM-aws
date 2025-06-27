@@ -268,7 +268,7 @@ def get_optimized_initial_followup_counts(user_ids, date, db, get_initial_follow
     Optimized function to get initial followup counts for multiple users at once
     """
     # Import here to avoid circular imports - use the correct module name
-    from application_eb import DailyFollowupCount, Lead
+    from app import DailyFollowupCount, Lead
     
     # Try to get from cache table first
     daily_counts = db.session.query(DailyFollowupCount).filter(
