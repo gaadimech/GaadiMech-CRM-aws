@@ -2,6 +2,7 @@
 venv/
 myenv/
 local_dev_env/
+local_env/
 env_name/
 env/
 .venv/
