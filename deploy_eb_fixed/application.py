@@ -26,10 +26,10 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 # AWS RDS fallback configuration
 if not DATABASE_URL:
-    RDS_HOST = os.getenv("RDS_HOST", "gaadimech-crm-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com")
-    RDS_DB = os.getenv("RDS_DB", "crmportal")
-    RDS_USER = os.getenv("RDS_USER", "postgres")
-    RDS_PASSWORD = os.getenv("RDS_PASSWORD", "GaadiMech2024!")
+    RDS_HOST = os.getenv("RDS_HOST", "crm-portal-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com")
+    RDS_DB = os.getenv("RDS_DB", "postgres")
+    RDS_USER = os.getenv("RDS_USER", "crmadmin")
+    RDS_PASSWORD = os.getenv("RDS_PASSWORD", "gaadimech123")
     RDS_PORT = os.getenv("RDS_PORT", "5432")
     
     # Try psycopg3 first, fallback to psycopg2
@@ -82,9 +82,6 @@ login_manager = LoginManager()
 login_manager.init_app(application)
 login_manager.login_view = 'login'
 
-# Simple in-memory cache for development
-dashboard_cache_store = {}
-
 print(f"Database connected using: {DATABASE_URL[:50]}...")
 
 # Configure rate limiter
@@ -96,12 +93,6 @@ limiter = Limiter(
 
 # Get IST timezone
 ist = timezone('Asia/Kolkata')
-
-# Mobile number mapping for team members
-USER_MOBILE_MAPPING = {
-    'Hemlata': '9672562111',
-    'Sneha': '+919672764111'
-}
 
 # Database Models
 class User(UserMixin, db.Model):
@@ -119,7 +110,7 @@ class User(UserMixin, db.Model):
         return self.password_hash == password
 
 class DailyFollowupCount(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     date = db.Column(db.Date, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     initial_count = db.Column(db.Integer, default=0)
@@ -202,153 +193,156 @@ def logout():
 @application.route('/')
 @login_required
 def index():
-    users = User.query.all()
-    return render_template('index.html', users=users)
+    return redirect(url_for('dashboard'))
 
 def utc_to_ist(utc_dt):
+    """Convert UTC datetime to IST"""
     if utc_dt is None:
         return None
-    if utc_dt.tzinfo is None:
-        utc_dt = pytz.UTC.localize(utc_dt)
-    ist_tz = pytz.timezone('Asia/Kolkata')
-    return utc_dt.astimezone(ist_tz)
+    utc_dt = utc_dt.replace(tzinfo=pytz.UTC)
+    ist_dt = utc_dt.astimezone(ist)
+    return ist_dt.replace(tzinfo=None)
 
 def get_initial_followup_count(user_id, date):
-    daily_count = DailyFollowupCount.query.filter_by(
-        user_id=user_id, 
-        date=date
-    ).first()
-    
-    if daily_count:
-        return daily_count.initial_count
-    else:
-        start_datetime = datetime.combine(date, time.min)
-        end_datetime = datetime.combine(date + timedelta(days=1), time.min)
+    """Get initial followup count for a user on a specific date"""
+    try:
+        # Check if there's already a record for this date and user
+        existing_record = DailyFollowupCount.query.filter_by(
+            user_id=user_id, 
+            date=date
+        ).first()
         
-        current_count = Lead.query.filter(
+        if existing_record:
+            return existing_record.initial_count
+        
+        # Calculate initial count: followups due on or before this date that were created before this date
+        count = Lead.query.filter(
             Lead.creator_id == user_id,
-            Lead.followup_date >= start_datetime,
-            Lead.followup_date < end_datetime
+            Lead.followup_date <= datetime.combine(date, time.max).replace(tzinfo=ist),
+            Lead.created_at < datetime.combine(date, time.min).replace(tzinfo=ist)
         ).count()
         
-        # Create record
-        daily_count = DailyFollowupCount(
-            user_id=user_id,
-            date=date,
-            initial_count=current_count
-        )
-        try:
-            db.session.add(daily_count)
-            db.session.commit()
-        except:
-            db.session.rollback()
-        
-        return current_count
+        return count
+    except Exception as e:
+        print(f"Error calculating initial followup count: {str(e)}")
+        return 0
 
 @application.route('/dashboard')
-@login_required
+@login_required  
 def dashboard():
     try:
+        # Import here to avoid circular import
+        from dashboard_optimized import get_optimized_dashboard_data
+        
+        # Get dashboard data with proper parameters
         selected_date = request.args.get('date', datetime.now(ist).strftime('%Y-%m-%d'))
-        selected_user_id = request.args.get('user_id', '')
+        selected_user_id = request.args.get('user_id', None)
         
-        # Use optimized dashboard function
-        try:
-            from dashboard_optimized import get_optimized_dashboard_data
-            template_data = get_optimized_dashboard_data(
-                current_user, selected_date, selected_user_id, 
-                ist, db, User, Lead, get_initial_followup_count
-            )
-        except Exception as e:
-            print(f"Dashboard optimization error: {e}")
-            # Fallback to basic dashboard
-            template_data = {
-                'todays_followups': [],
-                'daily_leads_count': 0,
-                'user_performance': [],
-                'status_counts': {'Needs Followup': 0},
-                'users': [current_user] if current_user.is_authenticated else [],
-                'selected_date': selected_date,
-                'selected_user_id': selected_user_id,
-                'total_leads': 0,
-                'followup_efficiency': 0,
-                'initial_followups_count': 0,
-                'completion_rate': 0,
-                'completed_followups': 0,
-                'USER_MOBILE_MAPPING': USER_MOBILE_MAPPING
-            }
-        
-        return render_template('dashboard.html', **template_data)
-        
+        dashboard_data = get_optimized_dashboard_data(
+            current_user, selected_date, selected_user_id, 
+            ist, db, User, Lead, get_initial_followup_count
+        )
+        return render_template('dashboard.html', **dashboard_data)
     except Exception as e:
         print(f"Dashboard error: {str(e)}")
-        flash('Dashboard temporarily unavailable. Please try again.', 'warning')
-        return redirect(url_for('index'))
+        flash('An error occurred loading the dashboard. Please try again.', 'error')
+        return render_template('error.html', 
+                             error_message="Dashboard temporarily unavailable",
+                             error_details=str(e))
 
 @application.route('/health-check')
 def health_check():
-    """Health check endpoint for AWS load balancer"""
+    """Simple health check endpoint"""
     try:
         # Test database connection
-        result = db.session.execute(db.text('SELECT 1')).fetchone()
+        db.session.execute(db.text('SELECT 1'))
+        db.session.commit()
+        
         return jsonify({
             'status': 'healthy',
-            'database': 'connected',
-            'timestamp': datetime.now(ist).isoformat()
+            'timestamp': datetime.now(ist).isoformat(),
+            'database': 'connected'
         }), 200
     except Exception as e:
         return jsonify({
             'status': 'unhealthy',
+            'timestamp': datetime.now(ist).isoformat(),
             'database': 'disconnected',
-            'error': str(e),
-            'timestamp': datetime.now(ist).isoformat()
+            'error': str(e)
         }), 500
 
 @application.route('/health')
 def health():
-    """Simple health endpoint"""
     return "OK", 200
 
 @application.route('/test_db')
 def test_database():
-    """Test database connection"""
     try:
-        result = db.session.execute(db.text('SELECT version()')).fetchone()
-        db_version = result[0] if result else 'Unknown'
+        # Test database connection
+        result = db.session.execute(db.text('SELECT version()'))
+        version = result.fetchone()[0]
         
+        # Test tables exist
         user_count = User.query.count()
         lead_count = Lead.query.count()
         
         return jsonify({
             'status': 'success',
-            'database_version': db_version,
+            'database_version': version,
             'user_count': user_count,
             'lead_count': lead_count,
-            'connection_url': application.config['SQLALCHEMY_DATABASE_URI'][:50] + '...'
-        }), 200
-        
+            'timestamp': datetime.now(ist).isoformat()
+        })
     except Exception as e:
         return jsonify({
             'status': 'error',
-            'error': str(e)
+            'error': str(e),
+            'timestamp': datetime.now(ist).isoformat()
         }), 500
 
-# Other routes (simplified for deployment)
 @application.route('/followups')
 @login_required
 def followups():
-    return render_template('followups.html', followups=[], team_members=[], selected_member_id='', timedelta=timedelta)
+    # Simple redirect to dashboard for now since get_followups_data doesn't exist
+    return redirect(url_for('dashboard'))
 
-# Error handlers
 @application.errorhandler(404)
 def not_found_error(error):
-    return render_template('error.html', error="404 - Page Not Found"), 404
+    return render_template('error.html', error_message="Page not found"), 404
 
 @application.errorhandler(500)
 def internal_error(error):
     db.session.rollback()
-    return render_template('error.html', error="500 - Internal Server Error"), 500
+    return render_template('error.html', error_message="Internal server error"), 500
+
+# Create tables function
+def create_tables():
+    """Create database tables if they don't exist"""
+    try:
+        with application.app_context():
+            # Create all tables
+            db.create_all()
+            print("✅ Database tables created successfully")
+            
+            # Check if admin user exists, if not create one
+            admin_user = User.query.filter_by(username='admin').first()
+            if not admin_user:
+                admin_user = User(
+                    username='admin',
+                    password_hash='admin123',  # Change this!
+                    name='Admin User',
+                    is_admin=True
+                )
+                db.session.add(admin_user)
+                db.session.commit()
+                print("✅ Default admin user created (username: admin, password: admin123)")
+                
+    except Exception as e:
+        print(f"❌ Error creating tables: {str(e)}")
+
+# Initialize database on startup if needed
+if os.getenv('ALLOW_DB_INIT', 'false').lower() == 'true':
+    create_tables()
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    application.run(host='0.0.0.0', port=port, debug=False) 
+    application.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8080))) 

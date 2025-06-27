@@ -76,11 +76,11 @@
             <div class="error-card">
                 <div class="error-header">
                     <div class="error-icon">
-                        {% if error.startswith('404') %}
+                        {% if error_message and '404' in error_message %}
                             ⚠️
-                        {% elif error.startswith('500') %}
+                        {% elif error_message and '500' in error_message %}
                             ⚡
-                        {% elif error.startswith('403') %}
+                        {% elif error_message and '403' in error_message %}
                             🔒
                         {% else %}
                             ❌
@@ -91,19 +91,19 @@
                 
                 <div class="error-body">
                     <div class="error-code">
-                        {% if error %}
-                            {{ error }}
+                        {% if error_message %}
+                            {{ error_message }}
                         {% else %}
                             Unknown Error
                         {% endif %}
                     </div>
                     
                     <div class="error-message">
-                        {% if error.startswith('404') %}
+                        {% if error_message and '404' in error_message %}
                             The page you're looking for couldn't be found.
-                        {% elif error.startswith('500') %}
+                        {% elif error_message and '500' in error_message %}
                             We're experiencing some technical difficulties.
-                        {% elif error.startswith('403') %}
+                        {% elif error_message and '403' in error_message %}
                             You don't have permission to access this resource.
                         {% else %}
                             An unexpected error has occurred.
@@ -147,7 +147,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Log error to console in development
             {% if config.DEBUG %}
-            console.error('Page Error:', '{{ error }}');
+            console.error('Page Error:', '{{ error_message }}');
             {% endif %}
         });
     </script>
