@@ -193,21 +193,6 @@ login_manager.refresh_view = "login"
 login_manager.needs_refresh_message = "Please login again to confirm your identity"
 login_manager.needs_refresh_message_category = "info"
 
-@application.route('/open_whatsapp/<mobile>')
-@login_required
-def open_whatsapp(mobile):
-    cleaned_mobile = ''.join(filter(str.isdigit, mobile))
-    if len(cleaned_mobile) == 10:
-        cleaned_mobile = '91' + cleaned_mobile
-    
-    user_agent = request.headers.get('User-Agent')
-    if 'Mobile' in user_agent:
-        whatsapp_url = f"whatsapp://send?phone={cleaned_mobile}"
-    else:
-        whatsapp_url = f"https://web.whatsapp.com/send?phone={cleaned_mobile}"
-    
-    return jsonify({'url': whatsapp_url})
-
 @application.route('/logout')
 @login_required
 def logout():
@@ -695,8 +680,21 @@ def internal_error(error):
     db.session.rollback()
     return render_template('error.html', error="500 - Internal Server Error"), 500
 
+# Add after the Flask app initialization
+if os.environ.get('FLASK_ENV') == 'production':
+    # Allow custom domain
+    application.config['SERVER_NAME'] = None  # Allow any host
+    # Or specifically set: application.config['SERVER_NAME'] = 'crm.gaadimech.com'
+
+@application.before_request
+def force_https():
+    """Force HTTPS in production"""
+    if os.environ.get('FLASK_ENV') == 'production':
+        if not request.is_secure and request.headers.get('X-Forwarded-Proto') != 'https':
+            return redirect(request.url.replace('http://', 'https://'))
+
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 3030))
+    port = int(os.environ.get('PORT', 5000))
     
     # Initialize the scheduler for daily snapshots only in production
     if os.environ.get('FLASK_ENV') != 'development':
