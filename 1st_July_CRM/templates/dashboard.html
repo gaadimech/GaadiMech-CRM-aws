@@ -1513,32 +1513,24 @@ Reply Karein ya call back Karein
         }
 
         function exportData() {
-            const data = {
-                date: '{{ selected_date }}',
-                user: '{{ selected_user_id }}',
-                initialFollowups: {{ initial_followups_count }},
-                pendingFollowups: {{ todays_followups|length }},
-                completionRate: {{ completion_rate }},
-                newLeads: {{ daily_leads_count }}
-            };
+            const date = '{{ selected_date }}';
+            const userId = '{{ selected_user_id }}';
             
-            const csvContent = 'data:text/csv;charset=utf-8,' +
-                'Metric,Value\n' +
-                `Date,${data.date}\n` +
-                `Initial Followups,${data.initialFollowups}\n` +
-                `Pending Followups,${data.pendingFollowups}\n` +
-                `Completion Rate,${data.completionRate}%\n` +
-                `New Leads Created,${data.newLeads}\n`;
+            // Build URL with query parameters
+            let exportUrl = `/api/export-mobile-numbers?date=${date}`;
+            if (userId) {
+                exportUrl += `&user_id=${userId}`;
+            }
             
-            const encodedUri = encodeURI(csvContent);
+            // Create a temporary link to trigger download
             const link = document.createElement('a');
-            link.setAttribute('href', encodedUri);
-            link.setAttribute('download', `dashboard_export_${data.date}.csv`);
+            link.href = exportUrl;
+            link.style.display = 'none';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             
-            showToast('Dashboard data exported successfully', 'success');
+            showToast('Mobile numbers exported successfully', 'success');
         }
 
         function showLoading(show) {
