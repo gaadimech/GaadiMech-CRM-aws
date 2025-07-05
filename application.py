@@ -11,6 +11,7 @@ from flask_limiter.util import get_remote_address
 from flask_migrate import Migrate
 from pytz import timezone
 import pytz
+from text_parser import parse_customer_text
 
 load_dotenv()
 
@@ -111,7 +112,7 @@ class DailyFollowupCount(db.Model):
 class Lead(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     customer_name = db.Column(db.String(100), nullable=False)
-    mobile = db.Column(db.String(12), nullable=False)
+    mobile = db.Column(db.String(15), nullable=False)
     car_registration = db.Column(db.String(20), nullable=True)
     followup_date = db.Column(db.DateTime, nullable=False)
     remarks = db.Column(db.Text)
@@ -124,6 +125,60 @@ class Lead(db.Model):
         db.CheckConstraint(
             status.in_(['Did Not Pick Up', 'Needs Followup', 'Confirmed', 'Open', 'Completed', 'Feedback']),
             name='valid_status'
+        ),
+    )
+
+class UnassignedLead(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    mobile = db.Column(db.String(15), nullable=False)
+    customer_name = db.Column(db.String(100), nullable=True)
+    car_manufacturer = db.Column(db.String(50), nullable=True)
+    car_model = db.Column(db.String(50), nullable=True)
+    pickup_type = db.Column(db.String(20), nullable=True)  # 'Pickup' or 'Self Walkin'
+    service_type = db.Column(db.String(50), nullable=True)
+    scheduled_date = db.Column(db.DateTime, nullable=True)
+    source = db.Column(db.String(30), nullable=True)  # 'WhatsApp', 'Chatbot', 'Website', 'Social Media'
+    remarks = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(ist))
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Relationship to team assignments
+    assignments = db.relationship('TeamAssignment', backref='unassigned_lead', lazy=True)
+
+    __table_args__ = (
+        db.CheckConstraint(
+            pickup_type.in_(['Pickup', 'Self Walkin']),
+            name='valid_pickup_type'
+        ),
+        db.CheckConstraint(
+            service_type.in_(['Express Car Service', 'Dent Paint', 'AC Service', 'Car Wash', 'Repairs']),
+            name='valid_service_type'
+        ),
+        db.CheckConstraint(
+            source.in_(['WhatsApp', 'Chatbot', 'Website', 'Social Media']),
+            name='valid_source'
+        ),
+    )
+
+class TeamAssignment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    unassigned_lead_id = db.Column(db.Integer, db.ForeignKey('unassigned_lead.id'), nullable=False)
+    assigned_to_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    assigned_date = db.Column(db.Date, nullable=False)
+    assigned_at = db.Column(db.DateTime, default=lambda: datetime.now(ist))
+    assigned_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='Assigned')
+    processed_at = db.Column(db.DateTime, nullable=True)
+    added_to_crm = db.Column(db.Boolean, default=False)
+    
+    # Relationships
+    assigned_to = db.relationship('User', foreign_keys=[assigned_to_user_id], backref='assigned_leads')
+    assigned_by_user = db.relationship('User', foreign_keys=[assigned_by])
+
+    __table_args__ = (
+        db.CheckConstraint(
+            status.in_(['Assigned', 'Contacted', 'Added to CRM', 'Ignored']),
+            name='valid_assignment_status'
         ),
     )
 
@@ -314,8 +369,10 @@ def add_lead():
             flash('All required fields must be filled', 'error')
             return redirect(url_for('index'))
 
-        if not re.match(r'^\d{10}$|^\d{12}$', mobile):
-            flash('Mobile number must be either 10 or 12 digits', 'error')
+        # Clean mobile number first
+        mobile = re.sub(r'[^\d]', '', mobile)
+        if len(mobile) not in [10, 12]:
+            flash('Mobile number must be 10 or 12 digits only', 'error')
             return redirect(url_for('index'))
 
         new_lead = Lead(
@@ -524,6 +581,38 @@ def export_mobile_numbers():
         print(f"Error exporting mobile numbers: {e}")
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
+@application.route('/api/parse-customer-text', methods=['POST'])
+@login_required
+def parse_customer_text_api():
+    """Parse customer information from text messages"""
+    try:
+        # Check if user is admin
+        if not current_user.is_admin:
+            return jsonify({'success': False, 'message': 'Access denied. Admin privileges required.'}), 403
+        
+        # Get the text from request
+        data = request.get_json()
+        if not data or 'text' not in data:
+            return jsonify({'success': False, 'message': 'No text provided'}), 400
+        
+        text = data['text'].strip()
+        if not text:
+            return jsonify({'success': False, 'message': 'Empty text provided'}), 400
+        
+        # Parse the text
+        parsed_info = parse_customer_text(text)
+        
+        # Return the parsed information
+        return jsonify({
+            'success': True,
+            'data': parsed_info,
+            'message': 'Text parsed successfully'
+        })
+        
+    except Exception as e:
+        print(f"Error parsing customer text: {e}")
+        return jsonify({'success': False, 'message': f'Error parsing text: {str(e)}'})
+
 @application.route('/dashboard')
 @login_required
 def dashboard():
@@ -611,6 +700,417 @@ def test_database():
             'status': 'error',
             'error': str(e)
         }), 500
+
+@application.route('/admin_leads', methods=['GET', 'POST'])
+@login_required
+def admin_leads():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        try:
+            # Get form data
+            mobile = request.form.get('mobile')
+            customer_name = request.form.get('customer_name')
+            car_manufacturer = request.form.get('car_manufacturer')
+            car_model = request.form.get('car_model')
+            pickup_type = request.form.get('pickup_type')
+            service_type = request.form.get('service_type')
+            scheduled_date_str = request.form.get('scheduled_date')
+            source = request.form.get('source')
+            remarks = request.form.get('remarks')
+            assign_to = request.form.get('assign_to')
+            
+            # Validate mobile number
+            if not mobile:
+                flash('Mobile number is required.', 'error')
+                return redirect(url_for('admin_leads'))
+            
+            # Validate team member assignment
+            if not assign_to:
+                flash('Team member assignment is required.', 'error')
+                return redirect(url_for('admin_leads'))
+            
+            # Clean mobile number
+            mobile = re.sub(r'[^\d]', '', mobile)
+            if len(mobile) not in [10, 12]:
+                flash('Mobile number must be 10 or 12 digits only.', 'error')
+                return redirect(url_for('admin_leads'))
+            
+            # Parse scheduled date
+            scheduled_date = None
+            if scheduled_date_str:
+                try:
+                    scheduled_date = datetime.strptime(scheduled_date_str, '%Y-%m-%d')
+                    scheduled_date = ist.localize(scheduled_date)
+                except ValueError:
+                    flash('Invalid date format.', 'error')
+                    return redirect(url_for('admin_leads'))
+            
+            # Convert empty strings to None for optional fields with constraints
+            pickup_type = pickup_type if pickup_type and pickup_type.strip() else None
+            service_type = service_type if service_type and service_type.strip() else None
+            source = source if source and source.strip() else None
+            customer_name = customer_name if customer_name and customer_name.strip() else None
+            car_manufacturer = car_manufacturer if car_manufacturer and car_manufacturer.strip() else None
+            car_model = car_model if car_model and car_model.strip() else None
+            remarks = remarks if remarks and remarks.strip() else None
+            
+            # Create new unassigned lead
+            new_lead = UnassignedLead(
+                mobile=mobile,
+                customer_name=customer_name,
+                car_manufacturer=car_manufacturer,
+                car_model=car_model,
+                pickup_type=pickup_type,
+                service_type=service_type,
+                scheduled_date=scheduled_date,
+                source=source,
+                remarks=remarks,
+                created_by=current_user.id
+            )
+            
+            db.session.add(new_lead)
+            db.session.flush()  # Get the ID
+            
+            # Create team assignment (now mandatory)
+            assignment_date = datetime.now(ist).date()
+            team_assignment = TeamAssignment(
+                unassigned_lead_id=new_lead.id,
+                assigned_to_user_id=int(assign_to),
+                assigned_date=assignment_date,
+                assigned_by=current_user.id
+            )
+            db.session.add(team_assignment)
+            
+            db.session.commit()
+            
+            flash('Lead added successfully!', 'success')
+            return redirect(url_for('admin_leads'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding lead: {str(e)}', 'error')
+            return redirect(url_for('admin_leads'))
+    
+    # Get all team members for assignment dropdown
+    team_members = User.query.filter_by(is_admin=False).all()
+    
+    # Get today's date in IST for default filter
+    today_date = datetime.now(ist).strftime('%Y-%m-%d')
+    
+    # Get recent unassigned leads with filters
+    query = UnassignedLead.query
+    
+    # Apply date filter if provided, default to today if no filter
+    created_date = request.args.get('created_date', today_date)
+    if created_date:
+        try:
+            filter_date = datetime.strptime(created_date, '%Y-%m-%d')
+            filter_date = ist.localize(filter_date)
+            end_date = filter_date + timedelta(days=1)
+            
+            filter_date_utc = filter_date.astimezone(pytz.UTC)
+            end_date_utc = end_date.astimezone(pytz.UTC)
+            
+            query = query.filter(
+                UnassignedLead.created_at >= filter_date_utc,
+                UnassignedLead.created_at < end_date_utc
+            )
+        except ValueError:
+            pass  # Invalid date format, ignore filter
+    
+    # Apply search filter if provided
+    search = request.args.get('search')
+    if search:
+        search_filter = f"%{search}%"
+        query = query.filter(
+            db.or_(
+                UnassignedLead.customer_name.ilike(search_filter),
+                UnassignedLead.car_manufacturer.ilike(search_filter),
+                UnassignedLead.car_model.ilike(search_filter)
+            )
+        )
+    
+    # Get pagination parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = 5
+    
+    # Get the filtered results with pagination
+    recent_leads_pagination = query.order_by(UnassignedLead.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    # Get team summary for the filtered date
+    team_summary = []
+    try:
+        filter_date_obj = datetime.strptime(created_date, '%Y-%m-%d').date()
+        for member in team_members:
+            # Count assignments for this member on the filtered date
+            assignment_count = TeamAssignment.query.join(UnassignedLead).filter(
+                TeamAssignment.assigned_to_user_id == member.id,
+                TeamAssignment.assigned_date == filter_date_obj
+            ).count()
+            
+            # Count how many of those have been added to CRM
+            crm_count = TeamAssignment.query.join(UnassignedLead).filter(
+                TeamAssignment.assigned_to_user_id == member.id,
+                TeamAssignment.assigned_date == filter_date_obj,
+                TeamAssignment.added_to_crm == True
+            ).count()
+            
+            team_summary.append({
+                'member': member,
+                'assigned_count': assignment_count,
+                'crm_count': crm_count
+            })
+    except ValueError:
+        # If date parsing fails, create empty summary
+        for member in team_members:
+            team_summary.append({
+                'member': member,
+                'assigned_count': 0,
+                'crm_count': 0
+            })
+    
+    # Sort team summary by assigned_count in descending order
+    team_summary.sort(key=lambda x: x['assigned_count'], reverse=True)
+    
+    return render_template('admin_leads.html', 
+                         team_members=team_members,
+                         recent_leads=recent_leads_pagination.items,
+                         recent_leads_pagination=recent_leads_pagination,
+                         team_summary=team_summary,
+                         today_date=today_date)
+
+@application.route('/team_leads')
+@login_required
+def team_leads():
+    if current_user.is_admin:
+        flash('This page is for team members only.', 'info')
+        return redirect(url_for('admin_leads'))
+    
+    # Get today's date
+    today = datetime.now(ist).date()
+    
+    # Get assignments for current user for today with filters
+    query = TeamAssignment.query.filter_by(
+        assigned_to_user_id=current_user.id,
+        assigned_date=today
+    ).join(UnassignedLead)
+    
+    # Apply date filter if provided (for created date of the unassigned lead)
+    created_date = request.args.get('created_date')
+    if created_date:
+        try:
+            filter_date = datetime.strptime(created_date, '%Y-%m-%d')
+            filter_date = ist.localize(filter_date)
+            end_date = filter_date + timedelta(days=1)
+            
+            filter_date_utc = filter_date.astimezone(pytz.UTC)
+            end_date_utc = end_date.astimezone(pytz.UTC)
+            
+            query = query.filter(
+                UnassignedLead.created_at >= filter_date_utc,
+                UnassignedLead.created_at < end_date_utc
+            )
+        except ValueError:
+            pass  # Invalid date format, ignore filter
+    
+    # Apply search filter if provided
+    search = request.args.get('search')
+    if search:
+        search_filter = f"%{search}%"
+        query = query.filter(
+            db.or_(
+                UnassignedLead.customer_name.ilike(search_filter),
+                UnassignedLead.car_manufacturer.ilike(search_filter),
+                UnassignedLead.car_model.ilike(search_filter)
+            )
+        )
+    
+    # Get the filtered assignments
+    assignments = query.all()
+    
+    return render_template('team_leads.html', assignments=assignments, today=today)
+
+@application.route('/edit_unassigned_lead/<int:lead_id>', methods=['GET', 'POST'])
+@login_required
+def edit_unassigned_lead(lead_id):
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('admin_leads'))
+    
+    lead = UnassignedLead.query.get_or_404(lead_id)
+    
+    if request.method == 'POST':
+        try:
+            # Get form data
+            mobile = request.form.get('mobile')
+            customer_name = request.form.get('customer_name')
+            car_manufacturer = request.form.get('car_manufacturer')
+            car_model = request.form.get('car_model')
+            pickup_type = request.form.get('pickup_type')
+            service_type = request.form.get('service_type')
+            scheduled_date_str = request.form.get('scheduled_date')
+            source = request.form.get('source')
+            remarks = request.form.get('remarks')
+            assign_to = request.form.get('assign_to')
+            
+            # Validate mobile number
+            if not mobile:
+                flash('Mobile number is required.', 'error')
+                team_members = User.query.filter_by(is_admin=False).all()
+                current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
+                return render_template('edit_unassigned_lead.html', 
+                                     lead=lead, 
+                                     team_members=team_members,
+                                     current_assignment=current_assignment)
+            
+            # Clean mobile number
+            mobile = re.sub(r'[^\d]', '', mobile)
+            if len(mobile) not in [10, 12]:
+                flash('Mobile number must be 10 or 12 digits only.', 'error')
+                team_members = User.query.filter_by(is_admin=False).all()
+                current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
+                return render_template('edit_unassigned_lead.html', 
+                                     lead=lead, 
+                                     team_members=team_members,
+                                     current_assignment=current_assignment)
+            
+            # Parse scheduled date
+            scheduled_date = None
+            if scheduled_date_str:
+                try:
+                    scheduled_date = datetime.strptime(scheduled_date_str, '%Y-%m-%d')
+                    scheduled_date = ist.localize(scheduled_date)
+                except ValueError:
+                    flash('Invalid date format.', 'error')
+                    team_members = User.query.filter_by(is_admin=False).all()
+                    current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
+                    return render_template('edit_unassigned_lead.html', 
+                                         lead=lead, 
+                                         team_members=team_members,
+                                         current_assignment=current_assignment)
+            
+            # Convert empty strings to None for optional fields with constraints
+            pickup_type = pickup_type if pickup_type and pickup_type.strip() else None
+            service_type = service_type if service_type and service_type.strip() else None
+            source = source if source and source.strip() else None
+            customer_name = customer_name if customer_name and customer_name.strip() else None
+            car_manufacturer = car_manufacturer if car_manufacturer and car_manufacturer.strip() else None
+            car_model = car_model if car_model and car_model.strip() else None
+            remarks = remarks if remarks and remarks.strip() else None
+            
+            # Update lead
+            lead.mobile = mobile
+            lead.customer_name = customer_name
+            lead.car_manufacturer = car_manufacturer
+            lead.car_model = car_model
+            lead.pickup_type = pickup_type
+            lead.service_type = service_type
+            lead.scheduled_date = scheduled_date
+            lead.source = source
+            lead.remarks = remarks
+            
+            # Handle team assignment
+            current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
+            
+            if assign_to:
+                # Team member is selected
+                if current_assignment:
+                    # Update existing assignment
+                    current_assignment.assigned_to_user_id = int(assign_to)
+                    current_assignment.assigned_date = datetime.now(ist).date()
+                    current_assignment.assigned_by = current_user.id
+                    current_assignment.assigned_at = datetime.now(ist)
+                else:
+                    # Create new assignment
+                    new_assignment = TeamAssignment(
+                        unassigned_lead_id=lead.id,
+                        assigned_to_user_id=int(assign_to),
+                        assigned_date=datetime.now(ist).date(),
+                        assigned_by=current_user.id
+                    )
+                    db.session.add(new_assignment)
+            else:
+                # No team member selected, remove existing assignment if any
+                if current_assignment:
+                    db.session.delete(current_assignment)
+            
+            db.session.commit()
+            
+            flash('Lead updated successfully!', 'success')
+            return redirect(url_for('admin_leads'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating lead: {str(e)}', 'error')
+            # Get current assignment for error page as well
+            team_members = User.query.filter_by(is_admin=False).all()
+            current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
+            return render_template('edit_unassigned_lead.html', 
+                                 lead=lead, 
+                                 team_members=team_members,
+                                 current_assignment=current_assignment)
+    
+    # Get all team members for assignment dropdown
+    team_members = User.query.filter_by(is_admin=False).all()
+    
+    # Get current assignment for this lead (if any)
+    current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
+    
+    return render_template('edit_unassigned_lead.html', 
+                         lead=lead, 
+                         team_members=team_members,
+                         current_assignment=current_assignment)
+
+@application.route('/add_to_crm/<int:assignment_id>', methods=['POST'])
+@login_required
+def add_to_crm(assignment_id):
+    try:
+        # Get the assignment
+        assignment = TeamAssignment.query.get_or_404(assignment_id)
+        
+        # Check if user has permission
+        if assignment.assigned_to_user_id != current_user.id:
+            flash('You can only add your own assigned leads to CRM.', 'error')
+            return redirect(url_for('team_leads'))
+        
+        # Check if already added
+        if assignment.added_to_crm:
+            flash('This lead has already been added to CRM.', 'info')
+            return redirect(url_for('team_leads'))
+        
+        unassigned_lead = assignment.unassigned_lead
+        
+        # Create new lead in main CRM
+        new_lead = Lead(
+            customer_name=unassigned_lead.customer_name or 'Unknown',
+            mobile=unassigned_lead.mobile,
+            car_registration='',
+            followup_date=datetime.now(ist) + timedelta(days=1),
+            remarks=f"Service: {unassigned_lead.service_type}. Source: {unassigned_lead.source}. {unassigned_lead.remarks or ''}",
+            creator_id=current_user.id
+        )
+        
+        db.session.add(new_lead)
+        
+        # Update assignment status
+        assignment.status = 'Added to CRM'
+        assignment.added_to_crm = True
+        assignment.processed_at = datetime.now(ist)
+        
+        db.session.commit()
+        
+        flash('Lead successfully added to CRM!', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error adding lead to CRM: {str(e)}', 'error')
+    
+    return redirect(url_for('team_leads'))
 
 @application.route('/followups')
 @login_required
