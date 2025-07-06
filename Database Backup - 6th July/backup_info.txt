@@ -1,0 +1,7 @@
+GaadiMech CRM Database Backup
+============================
+
+Backup created at: 2025-07-06 16:12:46 IST
+Database host: crm-portal-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com
+Database name: crmportal
+Backup format: SQL dump and CSV files

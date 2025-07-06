@@ -1,0 +1,10 @@
+id,username,password_hash,name,is_admin
+4,hemlata,hemlata,Hemlata,False
+1,admin,admin123,Admin User,True
+5,chetan,chetan123,Chetan,False
+6,sneha,sneha123,Sneha,False
+3,manisha,manisha123,Manisha,False
+2,mamta,mamta123,Mamta,False
+7,sarvesh,sarvesh123,Sarvesh,True
+8,aprajita,aprajita1234,Aprajita,False
+9,shivam,shivam123,Shivam,False
