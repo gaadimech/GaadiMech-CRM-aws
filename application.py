@@ -11,21 +11,29 @@ from flask_limiter.util import get_remote_address
 from flask_migrate import Migrate
 from pytz import timezone
 import pytz
-from text_parser import parse_customer_text
+from sqlalchemy import text
 
+# Load environment variables
 load_dotenv()
+
+# Try to import text_parser with fallback
+try:
+    from text_parser import parse_customer_text
+except ImportError:
+    def parse_customer_text(text):
+        return {"error": "Text parser not available"}
 
 application = Flask(__name__)
 application.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'GaadiMech2024!')
 
-# AWS Elastic Beanstalk database configuration
+# Database configuration with better error handling
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# AWS RDS configuration with better error handling
 if not DATABASE_URL:
-    RDS_HOST = os.getenv("RDS_HOST", "gaadimech-crm-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com")
+    # Fallback to individual environment variables
+    RDS_HOST = os.getenv("RDS_HOST", "crm-portal-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com")
     RDS_DB = os.getenv("RDS_DB", "crmportal")
-    RDS_USER = os.getenv("RDS_USER", "postgres")
+    RDS_USER = os.getenv("RDS_USER", "crmadmin")
     RDS_PASSWORD = os.getenv("RDS_PASSWORD", "GaadiMech2024!")
     RDS_PORT = os.getenv("RDS_PORT", "5432")
     
@@ -35,12 +43,14 @@ if not DATABASE_URL:
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
 
+print(f"Database URL configured: {DATABASE_URL[:50]}...")
+
 application.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # AWS optimized database settings
 application.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_size': 3,
+    'pool_size': 5,
     'pool_recycle': 1800,
     'pool_pre_ping': True,
     'connect_args': {
@@ -49,12 +59,27 @@ application.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     }
 }
 
+# Session configuration
+application.config.update(
+    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    REMEMBER_COOKIE_SECURE=False,
+    REMEMBER_COOKIE_HTTPONLY=True,
+    REMEMBER_COOKIE_DURATION=timedelta(hours=24),
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=24)
+)
+
 # Initialize extensions
 db = SQLAlchemy(application)
 migrate = Migrate(application, db)
 login_manager = LoginManager()
 login_manager.init_app(application)
 login_manager.login_view = 'login'
+login_manager.session_protection = "basic"
+login_manager.refresh_view = "login"
+login_manager.needs_refresh_message = "Please login again to confirm your identity"
+login_manager.needs_refresh_message_category = "info"
 
 # Simple cache
 dashboard_cache_store = {}
@@ -182,9 +207,30 @@ class TeamAssignment(db.Model):
         ),
     )
 
+class WorkedLead(db.Model):
+    """
+    Tracks when a lead has been worked upon by recording followup date changes.
+    This is used to calculate completion rates and track user performance.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    lead_id = db.Column(db.Integer, db.ForeignKey('lead.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    work_date = db.Column(db.Date, nullable=False)  # Date when the work was done
+    old_followup_date = db.Column(db.DateTime, nullable=True)  # Previous followup date
+    new_followup_date = db.Column(db.DateTime, nullable=False)  # New followup date
+    worked_at = db.Column(db.DateTime, default=lambda: datetime.now(ist))
+    
+    # Relationships
+    lead = db.relationship('Lead', backref='worked_entries')
+    user = db.relationship('User', backref='worked_leads')
+    
+    __table_args__ = (
+        db.UniqueConstraint('lead_id', 'user_id', 'work_date', name='unique_worked_lead_per_day'),
+    )
+
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 @application.route('/login', methods=['GET', 'POST'])
 @limiter.limit("20 per minute")
@@ -213,21 +259,21 @@ def login():
     
     return render_template('login.html')
 
-# Session configuration
-application.config.update(
-    SESSION_COOKIE_SECURE=False,  # Set to False for AWS ALB
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
-    REMEMBER_COOKIE_SECURE=False,  # Set to False for AWS ALB
-    REMEMBER_COOKIE_HTTPONLY=True,
-    REMEMBER_COOKIE_DURATION=timedelta(hours=24),
-    PERMANENT_SESSION_LIFETIME=timedelta(hours=24)
-)
+@application.before_request
+def before_request():
+    """Ensure database connection is active"""
+    try:
+        db.session.execute(text('SELECT 1'))
+    except Exception:
+        db.session.rollback()
+        raise
 
-login_manager.session_protection = "basic"
-login_manager.refresh_view = "login"
-login_manager.needs_refresh_message = "Please login again to confirm your identity"
-login_manager.needs_refresh_message_category = "info"
+@application.teardown_request
+def teardown_request(exception=None):
+    """Ensure proper cleanup after each request"""
+    if exception:
+        db.session.rollback()
+    db.session.remove()
 
 @application.route('/open_whatsapp/<mobile>')
 @login_required
@@ -348,6 +394,68 @@ def capture_daily_snapshot():
         print(f"Error in daily snapshot: {e}")
         db.session.rollback()
 
+def record_worked_lead(lead_id, user_id, old_followup_date, new_followup_date):
+    """
+    Record when a lead has been worked upon by changing its followup date.
+    This is used to track completion rates and user performance.
+    """
+    try:
+        # Get today's date in IST
+        today = datetime.now(ist).date()
+        
+        # Check if we already have a record for this lead on this day
+        existing_record = WorkedLead.query.filter_by(
+            lead_id=lead_id,
+            user_id=user_id,
+            work_date=today
+        ).first()
+        
+        if not existing_record:
+            # Create new worked lead record
+            worked_lead = WorkedLead(
+                lead_id=lead_id,
+                user_id=user_id,
+                work_date=today,
+                old_followup_date=old_followup_date,
+                new_followup_date=new_followup_date,
+                worked_at=datetime.now(ist)
+            )
+            db.session.add(worked_lead)
+            db.session.commit()
+            print(f"Recorded worked lead: Lead {lead_id} by User {user_id} on {today}")
+        else:
+            # Update existing record with new followup date
+            existing_record.new_followup_date = new_followup_date
+            existing_record.worked_at = datetime.now(ist)
+            db.session.commit()
+            print(f"Updated worked lead: Lead {lead_id} by User {user_id} on {today}")
+        
+    except Exception as e:
+        print(f"Error recording worked lead: {e}")
+        db.session.rollback()
+
+def get_worked_leads_for_date(user_id, date):
+    """
+    Get the count of worked leads for a specific user on a specific date.
+    """
+    try:
+        worked_count = WorkedLead.query.filter_by(
+            user_id=user_id,
+            work_date=date
+        ).count()
+        return worked_count
+    except Exception as e:
+        print(f"Error getting worked leads count: {e}")
+        return 0
+
+def calculate_completion_rate(initial_count, worked_count):
+    """
+    Calculate completion rate as a percentage.
+    """
+    if initial_count == 0:
+        return 0
+    return round((worked_count / initial_count) * 100, 1)
+
 @application.route('/add_lead', methods=['POST'])
 @login_required
 @limiter.limit("30 per minute")
@@ -413,6 +521,9 @@ def edit_lead(lead_id):
     
     if request.method == 'POST':
         try:
+            # Store old followup date for tracking
+            old_followup_date = lead.followup_date
+            
             lead.customer_name = request.form.get('customer_name')
             lead.mobile = request.form.get('mobile')
             lead.car_registration = request.form.get('car_registration')
@@ -421,10 +532,15 @@ def edit_lead(lead_id):
             
             # Handle followup date
             followup_date = datetime.strptime(request.form.get('followup_date'), '%Y-%m-%d')
-            lead.followup_date = ist.localize(followup_date)
+            new_followup_date = ist.localize(followup_date)
+            lead.followup_date = new_followup_date
             lead.modified_at = datetime.now(ist)
             
             db.session.commit()
+            
+            # Record that this lead has been worked upon only if followup date changed
+            if old_followup_date != new_followup_date:
+                record_worked_lead(lead.id, current_user.id, old_followup_date, new_followup_date)
             
             # Clear any cached queries to ensure dashboard gets fresh data
             db.session.expire_all()
@@ -481,14 +597,21 @@ def add_quick_followup():
         if not current_user.is_admin and lead.creator_id != current_user.id:
             return jsonify({'success': False, 'message': 'Permission denied'})
         
+        # Store old followup date for tracking
+        old_followup_date = lead.followup_date
+        
         # Update followup date
         followup_datetime = datetime.strptime(followup_date, '%Y-%m-%d')
-        lead.followup_date = ist.localize(followup_datetime)
+        new_followup_date = ist.localize(followup_datetime)
+        lead.followup_date = new_followup_date
         if remarks:
             lead.remarks = remarks
         lead.modified_at = datetime.now(ist)
         
         db.session.commit()
+        
+        # Record that this lead has been worked upon
+        record_worked_lead(lead_id, current_user.id, old_followup_date, new_followup_date)
         
         # Clear any cached queries to ensure dashboard gets fresh data
         db.session.expire_all()
@@ -613,604 +736,548 @@ def parse_customer_text_api():
         print(f"Error parsing customer text: {e}")
         return jsonify({'success': False, 'message': f'Error parsing text: {str(e)}'})
 
+@application.route('/api/user-followup-numbers/<int:user_id>', methods=['GET'])
+@login_required
+def get_user_followup_numbers(user_id):
+    """Get followup numbers for a specific user to send via WhatsApp"""
+    try:
+        # Check if user is admin
+        if not current_user.is_admin:
+            return jsonify({'success': False, 'message': 'Access denied. Admin privileges required.'}), 403
+        
+        # Get the user
+        user = User.query.get_or_404(user_id)
+        
+        # Get user's mobile number from mapping
+        user_mobile = USER_MOBILE_MAPPING.get(user.name, None)
+        
+        if not user_mobile:
+            return jsonify({'success': False, 'message': f'No mobile number found for {user.name}'})
+        
+        # Get today's date
+        today = datetime.now(ist).date()
+        target_start = ist.localize(datetime.combine(today, datetime.min.time()))
+        target_end = target_start + timedelta(days=1)
+        target_start_utc = target_start.astimezone(pytz.UTC)
+        target_end_utc = target_end.astimezone(pytz.UTC)
+        
+        # Get user's followups for today
+        followups = Lead.query.filter(
+            Lead.creator_id == user_id,
+            Lead.followup_date >= target_start_utc,
+            Lead.followup_date < target_end_utc
+        ).order_by(Lead.customer_name).all()
+        
+        # Format followup data
+        followup_data = []
+        for followup in followups:
+            followup_data.append({
+                'customer_name': followup.customer_name,
+                'mobile': followup.mobile,
+                'car_registration': followup.car_registration or '',
+                'status': followup.status,
+                'remarks': followup.remarks or ''
+            })
+        
+        return jsonify({
+            'success': True,
+            'user_name': user.name,
+            'user_mobile': user_mobile,
+            'total_followups': len(followup_data),
+            'followups': followup_data
+        })
+        
+    except Exception as e:
+        print(f"Error getting user followup numbers: {e}")
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
+
 @application.route('/dashboard')
 @login_required
 def dashboard():
     try:
+        # Get query parameters
         selected_date = request.args.get('date', datetime.now(ist).strftime('%Y-%m-%d'))
         selected_user_id = request.args.get('user_id', '')
         
-        # Use optimized dashboard function
+        # Parse the selected date
         try:
-            from dashboard_optimized import get_optimized_dashboard_data
-            template_data = get_optimized_dashboard_data(
-                current_user, selected_date, selected_user_id, 
-                ist, db, User, Lead, get_initial_followup_count
-            )
-        except Exception as e:
-            print(f"Dashboard optimization error: {e}")
-            # Fallback to basic dashboard
-            template_data = {
-                'todays_followups': [],
-                'daily_leads_count': 0,
-                'user_performance': [],
-                'status_counts': {'Needs Followup': 0},
-                'users': [current_user] if current_user.is_authenticated else [],
-                'selected_date': selected_date,
-                'selected_user_id': selected_user_id,
-                'total_leads': 0,
-                'followup_efficiency': 0,
-                'initial_followups_count': 0,
-                'completion_rate': 0,
-                'completed_followups': 0,
-                'USER_MOBILE_MAPPING': USER_MOBILE_MAPPING
-            }
+            target_date = datetime.strptime(selected_date, '%Y-%m-%d').date()
+            target_start = ist.localize(datetime.combine(target_date, datetime.min.time()))
+            target_end = target_start + timedelta(days=1)
+        except ValueError:
+            target_date = datetime.now(ist).date()
+            target_start = ist.localize(datetime.combine(target_date, datetime.min.time()))
+            target_end = target_start + timedelta(days=1)
+            selected_date = target_date.strftime('%Y-%m-%d')
         
-        return render_template('dashboard.html', **template_data)
+        # Convert to UTC for database queries
+        target_start_utc = target_start.astimezone(pytz.UTC)
+        target_end_utc = target_end.astimezone(pytz.UTC)
+        
+        # Get users based on permissions
+        if current_user.is_admin:
+            users = User.query.all()
+        else:
+            users = [current_user]
+            selected_user_id = str(current_user.id)
+        
+        # Base query setup with user filtering
+        base_conditions = []
+        if selected_user_id and current_user.is_admin:
+            try:
+                base_conditions.append(Lead.creator_id == int(selected_user_id))
+            except ValueError:
+                pass
+        elif not current_user.is_admin:
+            base_conditions.append(Lead.creator_id == current_user.id)
+        
+        # Get current followups for the selected date
+        current_followups_query = db.session.query(Lead).filter(
+            Lead.followup_date >= target_start_utc,
+            Lead.followup_date < target_end_utc
+        )
+        if base_conditions:
+            current_followups_query = current_followups_query.filter(*base_conditions)
+        
+        current_followups = current_followups_query.order_by(Lead.followup_date.asc()).all()
+        
+        # Convert followups to IST for display
+        for followup in current_followups:
+            if followup.followup_date:
+                followup.followup_date = utc_to_ist(followup.followup_date)
+            if followup.created_at:
+                followup.created_at = utc_to_ist(followup.created_at)
+            if followup.modified_at:
+                followup.modified_at = utc_to_ist(followup.modified_at)
+        
+        # Get daily leads count
+        daily_leads_count_query = db.session.query(db.func.count(Lead.id)).filter(
+            Lead.created_at >= target_start_utc,
+            Lead.created_at < target_end_utc
+        )
+        if base_conditions:
+            daily_leads_count_query = daily_leads_count_query.filter(*base_conditions)
+        
+        daily_leads_count = daily_leads_count_query.scalar() or 0
+        
+        # Get status counts
+        status_counts_query = db.session.query(
+            Lead.status,
+            db.func.count(Lead.id)
+        ).group_by(Lead.status)
+        
+        if base_conditions:
+            status_counts_query = status_counts_query.filter(*base_conditions)
+        
+        status_counts = dict(status_counts_query.all())
+        
+        # Get total leads count
+        total_leads_query = db.session.query(db.func.count(Lead.id))
+        if base_conditions:
+            total_leads_query = total_leads_query.filter(*base_conditions)
+        
+        total_leads = total_leads_query.scalar() or 0
+        
+        # Calculate user performance
+        user_performance_list = []
+        for user in users:
+            # Get user's followups for today
+            user_followups = [f for f in current_followups if f.creator_id == user.id]
+            
+            # Get initial followup count from 5AM snapshot
+            initial_count = get_initial_followup_count(user.id, target_date)
+            
+            # Get worked leads count for today
+            worked_count = get_worked_leads_for_date(user.id, target_date)
+            
+            # Calculate completion rate
+            completion_rate = calculate_completion_rate(initial_count, worked_count)
+            
+            # Calculate pending count
+            pending_count = max(0, initial_count - worked_count)
+            
+            # Get user's total leads
+            user_total = db.session.query(db.func.count(Lead.id)).filter(
+                Lead.creator_id == user.id
+            ).scalar() or 0
+            
+            # Get user's status counts
+            user_status_counts = dict(
+                db.session.query(
+                    Lead.status,
+                    db.func.count(Lead.id)
+                ).filter(
+                    Lead.creator_id == user.id
+                ).group_by(Lead.status).all()
+            )
+            
+            user_performance_list.append({
+                'user': user,
+                'initial_followups': initial_count,
+                'pending_followups': pending_count,
+                'worked_followups': worked_count,
+                'completion_rate': completion_rate,
+                'leads_created': user_total,
+                'confirmed': user_status_counts.get('Confirmed', 0),
+                'completed': user_status_counts.get('Completed', 0),
+                'assigned': initial_count,
+                'worked': worked_count,
+                'pending': pending_count,
+                'new_additions': 0,  # Add missing template variable
+                'original_assignment': initial_count  # Add missing template variable
+            })
+        
+        # Sort by completion rate
+        user_performance_list.sort(key=lambda x: (x['completion_rate'], x['initial_followups']), reverse=True)
+        
+        # Calculate overall metrics
+        total_initial_count = sum(perf['initial_followups'] for perf in user_performance_list)
+        total_worked_count = sum(perf['worked_followups'] for perf in user_performance_list)
+        overall_completion_rate = calculate_completion_rate(total_initial_count, total_worked_count)
+        
+        return render_template('dashboard.html',
+            todays_followups=current_followups,
+            daily_leads_count=daily_leads_count,
+            user_performance=user_performance_list,
+            status_counts=status_counts,
+            users=users,
+            selected_date=selected_date,
+            selected_user_id=selected_user_id,
+            total_leads=total_leads,
+            followup_efficiency=0,
+            initial_followups_count=total_initial_count,
+            completion_rate=overall_completion_rate,
+            completed_followups=total_worked_count,
+            current_pending_count=len(current_followups),
+            USER_MOBILE_MAPPING=USER_MOBILE_MAPPING
+        )
         
     except Exception as e:
         print(f"Dashboard error: {str(e)}")
-        flash('Dashboard temporarily unavailable. Please try again.', 'warning')
+        flash('Dashboard temporarily unavailable. Please try again.', 'error')
         return redirect(url_for('index'))
-
-@application.route('/health-check')
-def health_check():
-    """Health check endpoint for AWS load balancer"""
-    try:
-        # Test database connection
-        result = db.session.execute(db.text('SELECT 1')).fetchone()
-        return jsonify({
-            'status': 'healthy',
-            'database': 'connected',
-            'timestamp': datetime.now(ist).isoformat()
-        }), 200
-    except Exception as e:
-        return jsonify({
-            'status': 'unhealthy',
-            'database': 'disconnected',
-            'error': str(e),
-            'timestamp': datetime.now(ist).isoformat()
-        }), 500
-
-@application.route('/health')
-def health():
-    """Simple health endpoint"""
-    return "OK", 200
-
-@application.route('/test_db')
-def test_database():
-    """Test database connection"""
-    try:
-        result = db.session.execute(db.text('SELECT version()')).fetchone()
-        db_version = result[0] if result else 'Unknown'
-        
-        user_count = User.query.count()
-        lead_count = Lead.query.count()
-        
-        return jsonify({
-            'status': 'success',
-            'database_version': db_version,
-            'user_count': user_count,
-            'lead_count': lead_count,
-            'connection_url': application.config['SQLALCHEMY_DATABASE_URI'][:50] + '...'
-        }), 200
-        
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'error': str(e)
-        }), 500
-
-@application.route('/admin_leads', methods=['GET', 'POST'])
-@login_required
-def admin_leads():
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('index'))
-    
-    if request.method == 'POST':
-        try:
-            # Get form data
-            mobile = request.form.get('mobile')
-            customer_name = request.form.get('customer_name')
-            car_manufacturer = request.form.get('car_manufacturer')
-            car_model = request.form.get('car_model')
-            pickup_type = request.form.get('pickup_type')
-            service_type = request.form.get('service_type')
-            scheduled_date_str = request.form.get('scheduled_date')
-            source = request.form.get('source')
-            remarks = request.form.get('remarks')
-            assign_to = request.form.get('assign_to')
-            
-            # Validate mobile number
-            if not mobile:
-                flash('Mobile number is required.', 'error')
-                return redirect(url_for('admin_leads'))
-            
-            # Validate team member assignment
-            if not assign_to:
-                flash('Team member assignment is required.', 'error')
-                return redirect(url_for('admin_leads'))
-            
-            # Clean mobile number
-            mobile = re.sub(r'[^\d]', '', mobile)
-            if len(mobile) not in [10, 12]:
-                flash('Mobile number must be 10 or 12 digits only.', 'error')
-                return redirect(url_for('admin_leads'))
-            
-            # Parse scheduled date
-            scheduled_date = None
-            if scheduled_date_str:
-                try:
-                    scheduled_date = datetime.strptime(scheduled_date_str, '%Y-%m-%d')
-                    scheduled_date = ist.localize(scheduled_date)
-                except ValueError:
-                    flash('Invalid date format.', 'error')
-                    return redirect(url_for('admin_leads'))
-            
-            # Convert empty strings to None for optional fields with constraints
-            pickup_type = pickup_type if pickup_type and pickup_type.strip() else None
-            service_type = service_type if service_type and service_type.strip() else None
-            source = source if source and source.strip() else None
-            customer_name = customer_name if customer_name and customer_name.strip() else None
-            car_manufacturer = car_manufacturer if car_manufacturer and car_manufacturer.strip() else None
-            car_model = car_model if car_model and car_model.strip() else None
-            remarks = remarks if remarks and remarks.strip() else None
-            
-            # Create new unassigned lead
-            new_lead = UnassignedLead(
-                mobile=mobile,
-                customer_name=customer_name,
-                car_manufacturer=car_manufacturer,
-                car_model=car_model,
-                pickup_type=pickup_type,
-                service_type=service_type,
-                scheduled_date=scheduled_date,
-                source=source,
-                remarks=remarks,
-                created_by=current_user.id
-            )
-            
-            db.session.add(new_lead)
-            db.session.flush()  # Get the ID
-            
-            # Create team assignment (now mandatory)
-            assignment_date = datetime.now(ist).date()
-            team_assignment = TeamAssignment(
-                unassigned_lead_id=new_lead.id,
-                assigned_to_user_id=int(assign_to),
-                assigned_date=assignment_date,
-                assigned_by=current_user.id
-            )
-            db.session.add(team_assignment)
-            
-            db.session.commit()
-            
-            flash('Lead added successfully!', 'success')
-            return redirect(url_for('admin_leads'))
-            
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error adding lead: {str(e)}', 'error')
-            return redirect(url_for('admin_leads'))
-    
-    # Get all team members for assignment dropdown
-    team_members = User.query.filter_by(is_admin=False).all()
-    
-    # Get today's date in IST for default filter
-    today_date = datetime.now(ist).strftime('%Y-%m-%d')
-    
-    # Get recent unassigned leads with filters
-    query = UnassignedLead.query
-    
-    # Apply date filter if provided, default to today if no filter
-    created_date = request.args.get('created_date', today_date)
-    if created_date:
-        try:
-            filter_date = datetime.strptime(created_date, '%Y-%m-%d')
-            filter_date = ist.localize(filter_date)
-            end_date = filter_date + timedelta(days=1)
-            
-            filter_date_utc = filter_date.astimezone(pytz.UTC)
-            end_date_utc = end_date.astimezone(pytz.UTC)
-            
-            query = query.filter(
-                UnassignedLead.created_at >= filter_date_utc,
-                UnassignedLead.created_at < end_date_utc
-            )
-        except ValueError:
-            pass  # Invalid date format, ignore filter
-    
-    # Apply search filter if provided
-    search = request.args.get('search')
-    if search:
-        search_filter = f"%{search}%"
-        query = query.filter(
-            db.or_(
-                UnassignedLead.customer_name.ilike(search_filter),
-                UnassignedLead.car_manufacturer.ilike(search_filter),
-                UnassignedLead.car_model.ilike(search_filter)
-            )
-        )
-    
-    # Get pagination parameters
-    page = request.args.get('page', 1, type=int)
-    per_page = 5
-    
-    # Get the filtered results with pagination
-    recent_leads_pagination = query.order_by(UnassignedLead.created_at.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
-    
-    # Get team summary for the filtered date
-    team_summary = []
-    try:
-        filter_date_obj = datetime.strptime(created_date, '%Y-%m-%d').date()
-        for member in team_members:
-            # Count assignments for this member on the filtered date
-            assignment_count = TeamAssignment.query.join(UnassignedLead).filter(
-                TeamAssignment.assigned_to_user_id == member.id,
-                TeamAssignment.assigned_date == filter_date_obj
-            ).count()
-            
-            # Count how many of those have been added to CRM
-            crm_count = TeamAssignment.query.join(UnassignedLead).filter(
-                TeamAssignment.assigned_to_user_id == member.id,
-                TeamAssignment.assigned_date == filter_date_obj,
-                TeamAssignment.added_to_crm == True
-            ).count()
-            
-            team_summary.append({
-                'member': member,
-                'assigned_count': assignment_count,
-                'crm_count': crm_count
-            })
-    except ValueError:
-        # If date parsing fails, create empty summary
-        for member in team_members:
-            team_summary.append({
-                'member': member,
-                'assigned_count': 0,
-                'crm_count': 0
-            })
-    
-    # Sort team summary by assigned_count in descending order
-    team_summary.sort(key=lambda x: x['assigned_count'], reverse=True)
-    
-    return render_template('admin_leads.html', 
-                         team_members=team_members,
-                         recent_leads=recent_leads_pagination.items,
-                         recent_leads_pagination=recent_leads_pagination,
-                         team_summary=team_summary,
-                         today_date=today_date)
-
-@application.route('/team_leads')
-@login_required
-def team_leads():
-    if current_user.is_admin:
-        flash('This page is for team members only.', 'info')
-        return redirect(url_for('admin_leads'))
-    
-    # Get today's date
-    today = datetime.now(ist).date()
-    
-    # Get assignments for current user for today with filters
-    query = TeamAssignment.query.filter_by(
-        assigned_to_user_id=current_user.id,
-        assigned_date=today
-    ).join(UnassignedLead)
-    
-    # Apply date filter if provided (for created date of the unassigned lead)
-    created_date = request.args.get('created_date')
-    if created_date:
-        try:
-            filter_date = datetime.strptime(created_date, '%Y-%m-%d')
-            filter_date = ist.localize(filter_date)
-            end_date = filter_date + timedelta(days=1)
-            
-            filter_date_utc = filter_date.astimezone(pytz.UTC)
-            end_date_utc = end_date.astimezone(pytz.UTC)
-            
-            query = query.filter(
-                UnassignedLead.created_at >= filter_date_utc,
-                UnassignedLead.created_at < end_date_utc
-            )
-        except ValueError:
-            pass  # Invalid date format, ignore filter
-    
-    # Apply search filter if provided
-    search = request.args.get('search')
-    if search:
-        search_filter = f"%{search}%"
-        query = query.filter(
-            db.or_(
-                UnassignedLead.customer_name.ilike(search_filter),
-                UnassignedLead.car_manufacturer.ilike(search_filter),
-                UnassignedLead.car_model.ilike(search_filter)
-            )
-        )
-    
-    # Get the filtered assignments
-    assignments = query.all()
-    
-    return render_template('team_leads.html', assignments=assignments, today=today)
-
-@application.route('/edit_unassigned_lead/<int:lead_id>', methods=['GET', 'POST'])
-@login_required
-def edit_unassigned_lead(lead_id):
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('admin_leads'))
-    
-    lead = UnassignedLead.query.get_or_404(lead_id)
-    
-    if request.method == 'POST':
-        try:
-            # Get form data
-            mobile = request.form.get('mobile')
-            customer_name = request.form.get('customer_name')
-            car_manufacturer = request.form.get('car_manufacturer')
-            car_model = request.form.get('car_model')
-            pickup_type = request.form.get('pickup_type')
-            service_type = request.form.get('service_type')
-            scheduled_date_str = request.form.get('scheduled_date')
-            source = request.form.get('source')
-            remarks = request.form.get('remarks')
-            assign_to = request.form.get('assign_to')
-            
-            # Validate mobile number
-            if not mobile:
-                flash('Mobile number is required.', 'error')
-                team_members = User.query.filter_by(is_admin=False).all()
-                current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
-                return render_template('edit_unassigned_lead.html', 
-                                     lead=lead, 
-                                     team_members=team_members,
-                                     current_assignment=current_assignment)
-            
-            # Clean mobile number
-            mobile = re.sub(r'[^\d]', '', mobile)
-            if len(mobile) not in [10, 12]:
-                flash('Mobile number must be 10 or 12 digits only.', 'error')
-                team_members = User.query.filter_by(is_admin=False).all()
-                current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
-                return render_template('edit_unassigned_lead.html', 
-                                     lead=lead, 
-                                     team_members=team_members,
-                                     current_assignment=current_assignment)
-            
-            # Parse scheduled date
-            scheduled_date = None
-            if scheduled_date_str:
-                try:
-                    scheduled_date = datetime.strptime(scheduled_date_str, '%Y-%m-%d')
-                    scheduled_date = ist.localize(scheduled_date)
-                except ValueError:
-                    flash('Invalid date format.', 'error')
-                    team_members = User.query.filter_by(is_admin=False).all()
-                    current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
-                    return render_template('edit_unassigned_lead.html', 
-                                         lead=lead, 
-                                         team_members=team_members,
-                                         current_assignment=current_assignment)
-            
-            # Convert empty strings to None for optional fields with constraints
-            pickup_type = pickup_type if pickup_type and pickup_type.strip() else None
-            service_type = service_type if service_type and service_type.strip() else None
-            source = source if source and source.strip() else None
-            customer_name = customer_name if customer_name and customer_name.strip() else None
-            car_manufacturer = car_manufacturer if car_manufacturer and car_manufacturer.strip() else None
-            car_model = car_model if car_model and car_model.strip() else None
-            remarks = remarks if remarks and remarks.strip() else None
-            
-            # Update lead
-            lead.mobile = mobile
-            lead.customer_name = customer_name
-            lead.car_manufacturer = car_manufacturer
-            lead.car_model = car_model
-            lead.pickup_type = pickup_type
-            lead.service_type = service_type
-            lead.scheduled_date = scheduled_date
-            lead.source = source
-            lead.remarks = remarks
-            
-            # Handle team assignment
-            current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
-            
-            if assign_to:
-                # Team member is selected
-                if current_assignment:
-                    # Update existing assignment
-                    current_assignment.assigned_to_user_id = int(assign_to)
-                    current_assignment.assigned_date = datetime.now(ist).date()
-                    current_assignment.assigned_by = current_user.id
-                    current_assignment.assigned_at = datetime.now(ist)
-                else:
-                    # Create new assignment
-                    new_assignment = TeamAssignment(
-                        unassigned_lead_id=lead.id,
-                        assigned_to_user_id=int(assign_to),
-                        assigned_date=datetime.now(ist).date(),
-                        assigned_by=current_user.id
-                    )
-                    db.session.add(new_assignment)
-            else:
-                # No team member selected, remove existing assignment if any
-                if current_assignment:
-                    db.session.delete(current_assignment)
-            
-            db.session.commit()
-            
-            flash('Lead updated successfully!', 'success')
-            return redirect(url_for('admin_leads'))
-            
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating lead: {str(e)}', 'error')
-            # Get current assignment for error page as well
-            team_members = User.query.filter_by(is_admin=False).all()
-            current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
-            return render_template('edit_unassigned_lead.html', 
-                                 lead=lead, 
-                                 team_members=team_members,
-                                 current_assignment=current_assignment)
-    
-    # Get all team members for assignment dropdown
-    team_members = User.query.filter_by(is_admin=False).all()
-    
-    # Get current assignment for this lead (if any)
-    current_assignment = TeamAssignment.query.filter_by(unassigned_lead_id=lead.id).first()
-    
-    return render_template('edit_unassigned_lead.html', 
-                         lead=lead, 
-                         team_members=team_members,
-                         current_assignment=current_assignment)
-
-@application.route('/add_to_crm/<int:assignment_id>', methods=['POST'])
-@login_required
-def add_to_crm(assignment_id):
-    try:
-        # Get the assignment
-        assignment = TeamAssignment.query.get_or_404(assignment_id)
-        
-        # Check if user has permission
-        if assignment.assigned_to_user_id != current_user.id:
-            flash('You can only add your own assigned leads to CRM.', 'error')
-            return redirect(url_for('team_leads'))
-        
-        # Check if already added
-        if assignment.added_to_crm:
-            flash('This lead has already been added to CRM.', 'info')
-            return redirect(url_for('team_leads'))
-        
-        unassigned_lead = assignment.unassigned_lead
-        
-        # Create new lead in main CRM
-        new_lead = Lead(
-            customer_name=unassigned_lead.customer_name or 'Unknown',
-            mobile=unassigned_lead.mobile,
-            car_registration='',
-            followup_date=datetime.now(ist) + timedelta(days=1),
-            remarks=f"Service: {unassigned_lead.service_type}. Source: {unassigned_lead.source}. {unassigned_lead.remarks or ''}",
-            creator_id=current_user.id
-        )
-        
-        db.session.add(new_lead)
-        
-        # Update assignment status
-        assignment.status = 'Added to CRM'
-        assignment.added_to_crm = True
-        assignment.processed_at = datetime.now(ist)
-        
-        db.session.commit()
-        
-        flash('Lead successfully added to CRM!', 'success')
-        
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error adding lead to CRM: {str(e)}', 'error')
-    
-    return redirect(url_for('team_leads'))
 
 @application.route('/followups')
 @login_required
 def followups():
     try:
-        team_members = User.query.all() if current_user.is_admin else []
-        selected_member_id = request.args.get('team_member_id', '')
-        date = request.args.get('date', '')
+        # Get query parameters with better defaults
+        selected_date = request.args.get('date', '')  # Empty means show all
+        selected_user_id = request.args.get('user_id', '')
         created_date = request.args.get('created_date', '')
         modified_date = request.args.get('modified_date', '')
         car_registration = request.args.get('car_registration', '')
         mobile = request.args.get('mobile', '')
-        status_filter = request.args.get('status', '')
+        status = request.args.get('status', '')
+        search = request.args.get('search', '')
         
-        page = request.args.get('page', 1, type=int)
-        per_page = 50
-
+        # Start with base query
         query = Lead.query
-
-        # User-based filtering
-        if current_user.is_admin:
-            if selected_member_id:
-                query = query.filter(Lead.creator_id == selected_member_id)
-        else:
+        
+        # Apply user filter based on permissions
+        if current_user.is_admin and selected_user_id:
+            try:
+                user_id = int(selected_user_id)
+                query = query.filter(Lead.creator_id == user_id)
+            except ValueError:
+                pass  # Invalid user ID, show all
+        elif not current_user.is_admin:
+            # Non-admin users can only see their own leads
             query = query.filter(Lead.creator_id == current_user.id)
-
-        # Apply all filters if they exist
-        if status_filter:
-            query = query.filter(Lead.status == status_filter)
-            
-        if date:
-            start_date = datetime.strptime(date, '%Y-%m-%d')
-            start_date = ist.localize(start_date)
-            end_date = start_date + timedelta(days=1)
-            
-            start_date_utc = start_date.astimezone(pytz.UTC)
-            end_date_utc = end_date.astimezone(pytz.UTC)
-            
-            query = query.filter(
-                Lead.followup_date >= start_date_utc,
-                Lead.followup_date < end_date_utc
-            )
+        
+        # Apply date filters
+        if selected_date:
+            try:
+                target_date = datetime.strptime(selected_date, '%Y-%m-%d').date()
+                target_start = ist.localize(datetime.combine(target_date, datetime.min.time()))
+                target_end = target_start + timedelta(days=1)
+                target_start_utc = target_start.astimezone(pytz.UTC)
+                target_end_utc = target_end.astimezone(pytz.UTC)
+                query = query.filter(
+                    Lead.followup_date >= target_start_utc,
+                    Lead.followup_date < target_end_utc
+                )
+            except ValueError:
+                pass
         
         if created_date:
-            start_date = datetime.strptime(created_date, '%Y-%m-%d')
-            start_date = ist.localize(start_date)
-            end_date = start_date + timedelta(days=1)
-            
-            start_date_utc = start_date.astimezone(pytz.UTC)
-            end_date_utc = end_date.astimezone(pytz.UTC)
-            
-            query = query.filter(
-                Lead.created_at >= start_date_utc,
-                Lead.created_at < end_date_utc
-            )
-
-        if current_user.is_admin and modified_date:
-            start_date = datetime.strptime(modified_date, '%Y-%m-%d')
-            start_date = ist.localize(start_date)
-            end_date = start_date + timedelta(days=1)
-            
-            start_date_utc = start_date.astimezone(pytz.UTC)
-            end_date_utc = end_date.astimezone(pytz.UTC)
-            
-            query = query.filter(
-                Lead.modified_at >= start_date_utc,
-                Lead.modified_at < end_date_utc
-            )
+            try:
+                target_date = datetime.strptime(created_date, '%Y-%m-%d').date()
+                target_start = ist.localize(datetime.combine(target_date, datetime.min.time()))
+                target_end = target_start + timedelta(days=1)
+                target_start_utc = target_start.astimezone(pytz.UTC)
+                target_end_utc = target_end.astimezone(pytz.UTC)
+                query = query.filter(
+                    Lead.created_at >= target_start_utc,
+                    Lead.created_at < target_end_utc
+                )
+            except ValueError:
+                pass
         
+        if modified_date:
+            try:
+                target_date = datetime.strptime(modified_date, '%Y-%m-%d').date()
+                target_start = ist.localize(datetime.combine(target_date, datetime.min.time()))
+                target_end = target_start + timedelta(days=1)
+                target_start_utc = target_start.astimezone(pytz.UTC)
+                target_end_utc = target_end.astimezone(pytz.UTC)
+                query = query.filter(
+                    Lead.modified_at >= target_start_utc,
+                    Lead.modified_at < target_end_utc
+                )
+            except ValueError:
+                pass
+        
+        # Apply other filters
         if car_registration:
             query = query.filter(Lead.car_registration.ilike(f'%{car_registration}%'))
-            
+        
         if mobile:
             query = query.filter(Lead.mobile.ilike(f'%{mobile}%'))
         
-        followups = query.order_by(Lead.created_at.desc()).all()
-
-        # Convert to IST timezone efficiently
-        for followup in followups:
-            followup.created_at = utc_to_ist(followup.created_at)
-            followup.modified_at = utc_to_ist(followup.modified_at)
-            followup.followup_date = utc_to_ist(followup.followup_date)
-
-        return render_template('followups.html', 
-                             followups=followups, 
-                             team_members=team_members, 
-                             selected_member_id=selected_member_id,
-                             timedelta=timedelta,
-                             current_user=current_user,
-                             date=date,
-                             created_date=created_date,
-                             modified_date=modified_date,
-                             car_registration=car_registration,
-                             mobile=mobile,
-                             status_filter=status_filter)
+        if status:
+            query = query.filter(Lead.status == status)
+        
+        if search:
+            query = query.filter(
+                db.or_(
+                    Lead.customer_name.ilike(f'%{search}%'),
+                    Lead.mobile.ilike(f'%{search}%'),
+                    Lead.car_registration.ilike(f'%{search}%'),
+                    Lead.remarks.ilike(f'%{search}%')
+                )
+            )
+        
+        # Get all users for the dropdown
+        users = User.query.all() if current_user.is_admin else [current_user]
+        
+        # Get the followups with pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = 100  # Show more results per page to see more leads
+        
+        followups_pagination = query.order_by(Lead.followup_date.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        # Convert followups to IST for display
+        for followup in followups_pagination.items:
+            if followup.followup_date:
+                followup.followup_date = utc_to_ist(followup.followup_date)
+            if followup.created_at:
+                followup.created_at = utc_to_ist(followup.created_at)
+            if followup.modified_at:
+                followup.modified_at = utc_to_ist(followup.modified_at)
+        
+        return render_template('followups.html',
+            followups=followups_pagination.items,
+            followups_pagination=followups_pagination,
+            users=users,
+            selected_date=selected_date,
+            selected_user_id=selected_user_id,
+            created_date=created_date,
+            modified_date=modified_date,
+            car_registration=car_registration,
+            mobile=mobile,
+            status=status,
+            search=search,
+            USER_MOBILE_MAPPING=USER_MOBILE_MAPPING
+        )
         
     except Exception as e:
         print(f"Followups error: {str(e)}")
         flash('Error loading followups. Please try again.', 'error')
-        return render_template('followups.html', followups=[], team_members=[], selected_member_id='', timedelta=timedelta)
+        return redirect(url_for('index'))
+
+@application.route('/admin_leads')
+@login_required
+def admin_leads():
+    try:
+        # Check if user is admin
+        if not current_user.is_admin:
+            flash('Access denied. Admin privileges required.', 'error')
+            return redirect(url_for('index'))
+        
+        # Get query parameters
+        page = request.args.get('page', 1, type=int)
+        search = request.args.get('search', '')
+        created_date = request.args.get('created_date', '')
+        
+        # Base query for unassigned leads
+        unassigned_query = UnassignedLead.query
+        
+        # Apply filters
+        if search:
+            unassigned_query = unassigned_query.filter(
+                db.or_(
+                    UnassignedLead.customer_name.ilike(f'%{search}%'),
+                    UnassignedLead.mobile.ilike(f'%{search}%'),
+                    UnassignedLead.car_manufacturer.ilike(f'%{search}%'),
+                    UnassignedLead.car_model.ilike(f'%{search}%')
+                )
+            )
+        
+        if created_date:
+            try:
+                filter_date = datetime.strptime(created_date, '%Y-%m-%d').date()
+                start_date = ist.localize(datetime.combine(filter_date, datetime.min.time()))
+                end_date = start_date + timedelta(days=1)
+                start_date_utc = start_date.astimezone(pytz.UTC)
+                end_date_utc = end_date.astimezone(pytz.UTC)
+                
+                unassigned_query = unassigned_query.filter(
+                    UnassignedLead.created_at >= start_date_utc,
+                    UnassignedLead.created_at < end_date_utc
+                )
+            except ValueError:
+                pass
+        
+        # Paginate results
+        per_page = 20
+        recent_leads_pagination = unassigned_query.order_by(
+            UnassignedLead.created_at.desc()
+        ).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        # Get all team members for assignment dropdown
+        team_members = User.query.filter_by(is_admin=False).all()
+        
+        # Calculate team summary data
+        team_summary = []
+        for member in team_members:
+            # Get assigned leads count for today
+            today = datetime.now(ist).date()
+            assigned_count = TeamAssignment.query.filter(
+                TeamAssignment.assigned_to_user_id == member.id,
+                TeamAssignment.assigned_date == today
+            ).count()
+            
+            # Get CRM leads count for today
+            crm_count = Lead.query.filter(
+                Lead.creator_id == member.id,
+                Lead.created_at >= ist.localize(datetime.combine(today, datetime.min.time())).astimezone(pytz.UTC),
+                Lead.created_at < ist.localize(datetime.combine(today + timedelta(days=1), datetime.min.time())).astimezone(pytz.UTC)
+            ).count()
+            
+            team_summary.append({
+                'member': member,
+                'assigned_count': assigned_count,
+                'crm_count': crm_count
+            })
+        
+        return render_template('admin_leads.html',
+            recent_leads_pagination=recent_leads_pagination,
+            recent_leads=recent_leads_pagination.items,
+            team_members=team_members,
+            team_summary=team_summary,
+            today_date=datetime.now(ist).date().strftime('%Y-%m-%d'),
+            search=search,
+            created_date=created_date
+        )
+        
+    except Exception as e:
+        print(f"Admin leads error: {str(e)}")
+        flash('Error loading admin leads. Please try again.', 'error')
+        return redirect(url_for('index'))
+
+@application.route('/team_leads')
+@login_required
+def team_leads():
+    try:
+        # Get today's date
+        today = datetime.now(ist).date()
+        
+        # Get assignments for current user for today
+        assignments_query = TeamAssignment.query.filter(
+            TeamAssignment.assigned_to_user_id == current_user.id,
+            TeamAssignment.assigned_date == today
+        )
+        
+        # Apply filters
+        created_date = request.args.get('created_date', '')
+        search = request.args.get('search', '')
+        
+        if created_date:
+            try:
+                filter_date = datetime.strptime(created_date, '%Y-%m-%d').date()
+                assignments_query = assignments_query.filter(
+                    TeamAssignment.assigned_date == filter_date
+                )
+            except ValueError:
+                pass
+        
+        if search:
+            assignments_query = assignments_query.join(UnassignedLead).filter(
+                db.or_(
+                    UnassignedLead.customer_name.ilike(f'%{search}%'),
+                    UnassignedLead.car_manufacturer.ilike(f'%{search}%'),
+                    UnassignedLead.car_model.ilike(f'%{search}%')
+                )
+            )
+        
+        assignments = assignments_query.order_by(TeamAssignment.assigned_at.desc()).all()
+        
+        return render_template('team_leads.html',
+            assignments=assignments,
+            today=today,
+            search=search,
+            created_date=created_date
+        )
+        
+    except Exception as e:
+        print(f"Team leads error: {str(e)}")
+        flash('Error loading team leads. Please try again.', 'error')
+        return redirect(url_for('index'))
+
+@application.route('/edit_unassigned_lead/<int:lead_id>', methods=['GET', 'POST'])
+@login_required
+def edit_unassigned_lead(lead_id):
+    try:
+        # Check if user is admin
+        if not current_user.is_admin:
+            flash('Access denied. Admin privileges required.', 'error')
+            return redirect(url_for('index'))
+        
+        lead = UnassignedLead.query.get_or_404(lead_id)
+        
+        if request.method == 'POST':
+            # Update lead details
+            lead.customer_name = request.form.get('customer_name')
+            lead.mobile = request.form.get('mobile')
+            lead.car_manufacturer = request.form.get('car_manufacturer')
+            lead.car_model = request.form.get('car_model')
+            lead.pickup_type = request.form.get('pickup_type')
+            lead.service_type = request.form.get('service_type')
+            lead.source = request.form.get('source')
+            lead.remarks = request.form.get('remarks')
+            
+            # Handle scheduled date
+            scheduled_date = request.form.get('scheduled_date')
+            if scheduled_date:
+                lead.scheduled_date = ist.localize(datetime.strptime(scheduled_date, '%Y-%m-%d'))
+            
+            db.session.commit()
+            flash('Unassigned lead updated successfully!', 'success')
+            return redirect(url_for('admin_leads'))
+        
+        # Get team members for assignment dropdown
+        team_members = User.query.filter_by(is_admin=False).all()
+        
+        # Get current assignment if any
+        current_assignment = TeamAssignment.query.filter_by(
+            unassigned_lead_id=lead.id
+        ).order_by(TeamAssignment.assigned_at.desc()).first()
+        
+        return render_template('edit_unassigned_lead.html', 
+                             lead=lead, 
+                             team_members=team_members, 
+                             current_assignment=current_assignment)
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Edit unassigned lead error: {str(e)}")
+        flash('Error updating unassigned lead. Please try again.', 'error')
+        return redirect(url_for('admin_leads'))
 
 # Error handlers
 @application.errorhandler(404)
@@ -1266,7 +1333,17 @@ def init_database():
         db.session.rollback()
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))  # Changed to port 5000 for AWS compatibility
+    # Initialize database when application starts
+    try:
+        init_database()
+        print("✅ Database initialized successfully")
+    except Exception as e:
+        print(f"❌ Failed to initialize database: {e}")
+        import traceback
+        traceback.print_exc()
     
-    # Run in production mode for AWS
+    port = int(os.environ.get('PORT', 5000))
+    print(f"Starting application on port {port}")
+    
+    # Run without debug mode for better stability
     application.run(host='0.0.0.0', port=port, debug=False) 

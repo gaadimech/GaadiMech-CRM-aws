@@ -1,11 +1,15 @@
 # Virtual Environment Directories
-venv/
-myenv/
+venv*/
+venv_py*/
+myenv*/
 local_dev_env/
 local_env/
 env_name/
 env/
 .venv/
+*venv/
+*env/
+pyvenv.cfg
 
 # Python cache and compiled files
 __pycache__/
@@ -21,6 +25,9 @@ __pycache__/
 
 # Flask instance folder
 instance/
+
+# Documentation folder
+docs/
 
 # OS files
 .DS_Store

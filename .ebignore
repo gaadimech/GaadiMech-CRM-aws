@@ -1,0 +1,20 @@
+venv*/
+venv_py*/
+*venv/
+*env/
+pyvenv.cfg
+myenv*/
+__pycache__/
+*.pyc
+.git/
+.DS_Store
+# Exclude previous build artifacts and backups
+*.zip
+gaadimech-crm-*.
+deploy_*/
+# Exclude local scripts and tests
+*.sh
+test_*/
+*test_*.py
+# Exclude documentation
+docs/ 
