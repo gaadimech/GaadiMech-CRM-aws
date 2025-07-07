@@ -921,6 +921,13 @@ def dashboard():
                 ).group_by(Lead.status).all()
             )
             
+            # Get new leads count for the selected date
+            new_leads_count = db.session.query(db.func.count(Lead.id)).filter(
+                Lead.creator_id == user.id,
+                Lead.created_at >= target_start_utc,
+                Lead.created_at < target_end_utc
+            ).scalar() or 0
+            
             user_performance_list.append({
                 'user': user,
                 'initial_followups': initial_count,
@@ -928,13 +935,13 @@ def dashboard():
                 'worked_followups': worked_count,
                 'completion_rate': completion_rate,
                 'leads_created': user_total,
-                'confirmed': user_status_counts.get('Confirmed', 0),
+             
                 'completed': user_status_counts.get('Completed', 0),
                 'assigned': initial_count,
                 'worked': worked_count,
                 'pending': pending_count,
-                'new_additions': 0,  # Add missing template variable
-                'original_assignment': initial_count  # Add missing template variable
+                'new_additions': new_leads_count,  # Update with actual new leads count
+                'original_assignment': initial_count
             })
         
         # Sort by completion rate
@@ -1177,7 +1184,7 @@ def followups():
         flash('Error loading followups. Please try again.', 'error')
         return redirect(url_for('index'))
 
-@application.route('/admin_leads')
+@application.route('/admin_leads', methods=['GET', 'POST'])
 @login_required
 def admin_leads():
     try:
@@ -1186,6 +1193,80 @@ def admin_leads():
             flash('Access denied. Admin privileges required.', 'error')
             return redirect(url_for('index'))
         
+        if request.method == 'POST':
+            # Handle form submission to add new unassigned lead
+            mobile = request.form.get('mobile')
+            customer_name = request.form.get('customer_name')
+            car_manufacturer = request.form.get('car_manufacturer')
+            car_model = request.form.get('car_model')
+            pickup_type = request.form.get('pickup_type')
+            service_type = request.form.get('service_type')
+            source = request.form.get('source')
+            remarks = request.form.get('remarks')
+            scheduled_date = request.form.get('scheduled_date')
+            assign_to = request.form.get('assign_to')
+            
+            # Validate required fields
+            if not mobile:
+                flash('Mobile number is required', 'error')
+                return redirect(url_for('admin_leads'))
+            
+            # Clean mobile number
+            mobile = re.sub(r'[^\d]', '', mobile)
+            if len(mobile) not in [10, 12]:
+                flash('Mobile number must be 10 or 12 digits only', 'error')
+                return redirect(url_for('admin_leads'))
+            
+            if not assign_to:
+                flash('Please select a team member to assign this lead', 'error')
+                return redirect(url_for('admin_leads'))
+            
+            try:
+                # Create new unassigned lead
+                new_unassigned_lead = UnassignedLead(
+                    mobile=mobile,
+                    customer_name=customer_name,
+                    car_manufacturer=car_manufacturer,
+                    car_model=car_model,
+                    pickup_type=pickup_type,
+                    service_type=service_type,
+                    source=source,
+                    remarks=remarks,
+                    created_at=datetime.now(ist),
+                    created_by=current_user.id
+                )
+                
+                # Handle scheduled date
+                if scheduled_date:
+                    new_unassigned_lead.scheduled_date = ist.localize(datetime.strptime(scheduled_date, '%Y-%m-%d'))
+                
+                db.session.add(new_unassigned_lead)
+                db.session.flush()  # Get the ID of the new lead
+                
+                # Create team assignment
+                today = datetime.now(ist).date()
+                new_assignment = TeamAssignment(
+                    unassigned_lead_id=new_unassigned_lead.id,
+                    assigned_to_user_id=int(assign_to),
+                    assigned_date=today,
+                    assigned_at=datetime.now(ist),
+                    assigned_by=current_user.id,
+                    status='Assigned'
+                )
+                
+                db.session.add(new_assignment)
+                db.session.commit()
+                
+                flash('Lead added and assigned successfully!', 'success')
+                return redirect(url_for('admin_leads'))
+                
+            except Exception as e:
+                db.session.rollback()
+                print(f"Error adding unassigned lead: {str(e)}")
+                flash('Error adding lead. Please try again.', 'error')
+                return redirect(url_for('admin_leads'))
+        
+        # Handle GET request - display the page
         # Get query parameters
         page = request.args.get('page', 1, type=int)
         search = request.args.get('search', '')
