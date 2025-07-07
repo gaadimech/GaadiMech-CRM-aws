@@ -129,32 +129,43 @@
             font-size: 0.75rem;
             padding: 0.25rem 0.5rem;
         }
+        /* Followup item styles */
         .followup-item {
             border-left: 4px solid #007bff;
             margin-bottom: 0.5rem;
             transition: all 0.3s ease;
         }
+        
         .followup-item:hover {
             background-color: #f8f9fa;
             border-left-color: #28a745;
         }
+        
         .overdue {
             border-left-color: #dc3545;
         }
+        
+        /* Chart container */
         .chart-container {
             position: relative;
             height: 300px;
         }
+        
+        /* Button styles */
         .quick-action-btn {
             font-size: 0.75rem;
             padding: 0.25rem 0.5rem;
             margin: 0.1rem;
         }
+        
+        /* Performance rank */
         .performance-rank {
             font-size: 1.2rem;
             font-weight: bold;
             color: #ffd700;
         }
+        
+        /* Loading spinner */
         .loading-spinner {
             display: none;
         }
@@ -236,7 +247,7 @@
         
         .mobile-card-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 10px;
         }
@@ -266,368 +277,20 @@
         }
         
         /* Form controls mobile optimization */
-        .form-control, .form-select {
-            font-size: 16px; /* Prevents zoom on iOS */
+        .form-control,
+        .form-select {
+            font-size: 16px;
             border-radius: 8px;
         }
         
         /* Quick stats mobile layout */
-        .quick-stats-mobile {
-            display: none;
-        }
-        
-        .quick-stat-item {
-            background: white;
-            border-radius: 10px;
-            padding: 15px;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 10px;
-        }
-        
-        .quick-stat-number {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #667eea;
-        }
-        
-        .quick-stat-label {
-            font-size: 0.85rem;
-            color: #666;
-            margin-top: 5px;
-        }
-        
-        /* Performance table mobile cards */
-        .performance-mobile-card {
-            background: white;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            position: relative;
-        }
-        
-        .performance-rank-badge {
-            position: absolute;
-            top: -10px;
-            right: 15px;
-            background: #667eea;
-            color: white;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 0.9rem;
-        }
-        
-        /* Mobile specific styles */
-        @media (max-width: 768px) {
-            .content-container {
-                padding: 15px;
-            }
-            
-            .nav-tabs {
-                padding: 0 10px;
-            }
-            
-            .nav-tabs .nav-link {
-                padding: 15px 20px;
-                font-size: 14px;
-            }
-            
-            .chart-container {
-                height: 250px;
-            }
-            
-            /* Hide desktop table, show mobile cards */
-            .table-responsive {
-                display: none;
-            }
-            
-            .mobile-table {
-                display: block;
-            }
-            
-            /* Show mobile quick stats */
-            .quick-stats-mobile {
-                display: block;
-            }
-            
-            .d-none-mobile {
-                display: none !important;
-            }
-            
-            /* Card body padding adjustment */
-            .card-body {
-                padding: 15px;
-            }
-            
-            .card-header {
-                padding: 15px;
-            }
-            
-            /* Filter form mobile layout */
-            .filter-form .row {
-                margin: 0;
-            }
-            
-            .filter-form .col-md-4 {
-                padding: 5px;
-                margin-bottom: 10px;
-            }
-            
-            .filter-form .btn {
-                width: 100%;
-                margin-bottom: 5px;
-            }
-            
-            /* Metric cards mobile spacing */
-            .metric-cards .col-xl-4 {
-                margin-bottom: 15px;
-            }
-            
-            .brand-header .navbar-brand {
-                font-size: 1.2rem;
-            }
-        }
-        
-        @media (max-width: 576px) {
-            .content-container {
-                padding: 10px;
-            }
-            
-            .card-header h5 {
-                font-size: 1rem;
-            }
-            
-            .mobile-card {
-                padding: 12px;
-            }
-            
-            .mobile-card-actions .btn {
-                font-size: 0.7rem;
-                padding: 4px 8px;
-            }
-            
-            .quick-stat-number {
-                font-size: 1.25rem;
-            }
-            
-            .nav-tabs .nav-link {
-                padding: 12px 15px;
-                font-size: 13px;
-            }
-            
-            .brand-header .navbar-brand {
-                font-size: 1rem;
-            }
-        }
-        
-        /* Touch-friendly sizing */
-        @media (pointer: coarse) {
-            .btn {
-                min-height: 44px;
-                padding: 8px 16px;
-            }
-            
-            .form-control, .form-select {
-                min-height: 44px;
-            }
-            
-            .mobile-card-actions .btn {
-                min-height: 36px;
-            }
-        }
-        
-        /* Performance optimizations */
-        .lazy-load {
-            opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.3s ease, transform 0.3s ease;
-        }
-        
-        .lazy-load.loaded {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        
-        /* Utility classes */
-        .text-truncate-mobile {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 150px;
-        }
-        
-        .whatsapp-btn {
-            background-color: #25D366;
-            border-color: #25D366;
-            color: white !important;
-        }
-        
-        .whatsapp-btn:hover {
-            background-color: #128C7E;
-            border-color: #128C7E;
-            color: white !important;
-        }
-        
-        /* Dashboard Styles */
-        .dashboard-card {
-            border: none;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            border-radius: 12px;
-        }
-        
-        .metric-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 15px;
-            padding: 20px;
-            color: white;
-            border: none;
-        }
-        
-        .metric-value {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .metric-label {
-            font-size: 0.9rem;
-            opacity: 0.8;
-        }
-        
-        .mobile-table {
-            display: none;
-        }
-        
-        @media (max-width: 768px) {
-            .mobile-table {
-                display: block !important;
-            }
-        }
-        
-        .mobile-card {
-            background: white;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e9ecef;
-        }
-        
-        .mobile-card-header {
-            display: flex;
-            justify-content: between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        
-        .mobile-card-title {
-            font-weight: bold;
-            font-size: 1.1rem;
-            color: #333;
-        }
-        
-        .mobile-card-subtitle {
-            color: #666;
-            font-size: 0.9rem;
-            margin-bottom: 5px;
-        }
-        
-        .mobile-card-actions {
-            margin-top: 10px;
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        
-        .mobile-card-actions .btn {
-            font-size: 0.8rem;
-            padding: 5px 10px;
-        }
-        
-        .performance-mobile-card {
-            background: white;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e9ecef;
-            position: relative;
-        }
-        
-        .performance-rank-badge {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: #007bff;
-            color: white;
-            border-radius: 50%;
-            width: 25px;
-            height: 25px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-        
-        .loading-spinner {
-            display: none;
-            z-index: 9999;
-        }
-        
-        .loading-spinner.show {
-            display: block;
-        }
-        
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-        }
-        
-        .toast {
-            margin-bottom: 10px;
-        }
-        
-        .quick-stats {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
-        
-        .quick-stat-item {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            flex: 1;
-            min-width: 120px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e9ecef;
-        }
-        
-        .quick-stat-number {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #007bff;
-            margin-bottom: 5px;
-        }
-        
         .quick-stat-label {
             font-size: 0.8rem;
             color: #666;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-
+        
         /* WhatsApp Template Modal Styles */
         .template-option {
             cursor: pointer;
@@ -1307,28 +970,78 @@ Reply Karein ya call back Karein
 
     <!-- Follow-up Scheduling Modal -->
     <div class="modal fade" id="followupModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Schedule Follow-up</h5>
+                    <h5 class="modal-title">
+                        <i class="fas fa-edit me-2"></i>Edit Lead
+                    </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <form id="followupForm">
                         <input type="hidden" id="followupLeadId">
+                        
                         <div class="mb-3">
-                            <label for="followupDate" class="form-label">Follow-up Date</label>
+                            <label for="customerName" class="form-label">
+                                <i class="fas fa-user"></i>Customer Name
+                            </label>
+                            <input type="text" class="form-control" id="customerName" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="mobileNumber" class="form-label">
+                                <i class="fas fa-phone"></i>Mobile Number
+                            </label>
+                            <input type="text" class="form-control" id="mobileNumber" required>
+                            <div class="form-text">Enter 10 or 12 digits only (no + required)</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="carRegistration" class="form-label">
+                                <i class="fas fa-car"></i>Car Registration Number
+                            </label>
+                            <input type="text" class="form-control" id="carRegistration" placeholder="E.G., MH12AB1234">
+                            <div class="form-text">Optional: Enter vehicle registration number</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="followupDate" class="form-label">
+                                <i class="fas fa-calendar"></i>Follow-up Date
+                            </label>
                             <input type="date" class="form-control" id="followupDate" required>
                         </div>
+
                         <div class="mb-3">
-                            <label for="followupRemarks" class="form-label">Remarks</label>
+                            <label for="status" class="form-label">
+                                <i class="fas fa-info-circle"></i>Status
+                            </label>
+                            <select class="form-select" id="status" required>
+                                <option value="Needs Followup">Needs Followup</option>
+                                <option value="Interested">Interested</option>
+                                <option value="Not Interested">Not Interested</option>
+                                <option value="Wrong Number">Wrong Number</option>
+                                <option value="Call Later">Call Later</option>
+                                <option value="Already Serviced">Already Serviced</option>
+                                <option value="Out of Coverage Area">Out of Coverage Area</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="followupRemarks" class="form-label">
+                                <i class="fas fa-comment"></i>Remarks
+                            </label>
                             <textarea class="form-control" id="followupRemarks" rows="3"></textarea>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="saveFollowup()">Save Follow-up</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="saveFollowup()">
+                        <i class="fas fa-save me-2"></i>Save Changes
+                    </button>
                 </div>
             </div>
         </div>
@@ -1400,31 +1113,58 @@ Reply Karein ya call back Karein
         }
 
         function scheduleFollowup(leadId) {
-            document.getElementById('followupLeadId').value = leadId;
-            document.getElementById('followupDate').value = '';
-            document.getElementById('followupRemarks').value = '';
-            new bootstrap.Modal(document.getElementById('followupModal')).show();
+            showLoading(true);
+            fetch(`/api/dashboard/followup/${leadId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('followupLeadId').value = leadId;
+                        document.getElementById('customerName').value = data.customer_name;
+                        document.getElementById('mobileNumber').value = data.mobile;
+                        document.getElementById('carRegistration').value = data.car_registration || '';
+                        document.getElementById('followupDate').value = data.followup_date;
+                        document.getElementById('status').value = data.status;
+                        document.getElementById('followupRemarks').value = data.remarks || '';
+                        new bootstrap.Modal(document.getElementById('followupModal')).show();
+                    } else {
+                        showToast(data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    showToast('Error fetching followup details', 'error');
+                })
+                .finally(() => {
+                    showLoading(false);
+                });
         }
 
         function saveFollowup() {
             const leadId = document.getElementById('followupLeadId').value;
+            const customerName = document.getElementById('customerName').value;
+            const mobileNumber = document.getElementById('mobileNumber').value;
+            const carRegistration = document.getElementById('carRegistration').value;
             const followupDate = document.getElementById('followupDate').value;
+            const status = document.getElementById('status').value;
             const remarks = document.getElementById('followupRemarks').value;
 
-            if (!followupDate) {
-                showToast('Please select a follow-up date', 'error');
+            if (!customerName || !mobileNumber) {
+                showToast('Customer Name and Mobile Number are required', 'error');
                 return;
             }
 
             showLoading(true);
-            fetch('/api/dashboard/quick-followup', {
+            fetch('/api/dashboard/update-followup', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     lead_id: leadId,
+                    customer_name: customerName,
+                    mobile: mobileNumber,
+                    car_registration: carRegistration,
                     followup_date: followupDate,
+                    status: status,
                     remarks: remarks
                 })
             })
@@ -1439,7 +1179,7 @@ Reply Karein ya call back Karein
                 }
             })
             .catch(error => {
-                showToast('Error scheduling follow-up', 'error');
+                showToast('Error saving followup changes', 'error');
             })
             .finally(() => {
                 showLoading(false);

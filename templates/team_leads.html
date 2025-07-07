@@ -576,12 +576,10 @@
                                                 WhatsApp
                                             </button>
                                             {% if not assignment.added_to_crm %}
-                                            <form method="POST" action="{{ url_for('add_to_crm', assignment_id=assignment.id) }}" style="display: inline;">
-                                                <button type="submit" class="btn btn-add-crm btn-sm" onclick="return confirm('Are you sure you want to add this lead to the main CRM?')">
-                                                    <i class="fas fa-plus"></i>
-                                                    Add to CRM
-                                                </button>
-                                            </form>
+                                            <button type="button" class="btn btn-add-crm btn-sm" onclick="showAddToCrmModal({{ assignment.id }})">
+                                                <i class="fas fa-plus"></i>
+                                                Add to CRM
+                                            </button>
                                             {% else %}
                                             <span class="badge bg-success fs-6 py-2 px-3">
                                                 <i class="fas fa-check-circle"></i>
@@ -602,6 +600,101 @@
                     </div>
                 {% endif %}
             </div>
+        </div>
+    </div>
+
+    <!-- Add to CRM Modal -->
+    <div class="modal fade" id="addToCrmModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus me-2"></i>Add Lead to CRM
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addToCrmForm">
+                        <input type="hidden" id="assignmentId">
+                        
+                        <div class="mb-3">
+                            <label for="crmCustomerName" class="form-label">
+                                <i class="fas fa-user"></i> Customer Name
+                            </label>
+                            <input type="text" class="form-control" id="crmCustomerName" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="crmMobileNumber" class="form-label">
+                                <i class="fas fa-phone"></i> Mobile Number
+                            </label>
+                            <input type="text" class="form-control" id="crmMobileNumber" required>
+                            <div class="form-text">Enter 10 or 12 digits only (no + required)</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="crmCarRegistration" class="form-label">
+                                <i class="fas fa-car"></i> Car Registration Number
+                            </label>
+                            <input type="text" class="form-control" id="crmCarRegistration" placeholder="E.G., MH12AB1234">
+                            <div class="form-text">Optional: Enter vehicle registration number</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="crmFollowupDate" class="form-label">
+                                <i class="fas fa-calendar"></i> Follow-up Date
+                            </label>
+                            <input type="date" class="form-control" id="crmFollowupDate" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="crmStatus" class="form-label">
+                                <i class="fas fa-info-circle"></i> Status
+                            </label>
+                            <select class="form-select" id="crmStatus" required>
+                                <option value="Needs Followup">Needs Followup</option>
+                                <option value="Did Not Pick Up">Did Not Pick Up</option>
+                                <option value="Confirmed">Confirmed</option>
+                                <option value="Open">Open</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Feedback">Feedback</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="crmRemarks" class="form-label">
+                                <i class="fas fa-comment"></i> Remarks
+                            </label>
+                            <textarea class="form-control" id="crmRemarks" rows="4"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveAddToCrm()">
+                        <i class="fas fa-plus"></i> Add to CRM
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto" id="toastTitle">Notification</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastBody">
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="position-fixed top-50 start-50 translate-middle" style="display: none; z-index: 9999;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
         </div>
     </div>
 
@@ -641,6 +734,117 @@
                 fullText.style.display = 'none';
                 element.innerHTML = '<small>Show More</small>';
             }
+        }
+
+        function showLoading(show) {
+            const spinner = document.getElementById('loadingSpinner');
+            if (show) {
+                spinner.style.display = 'block';
+            } else {
+                spinner.style.display = 'none';
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastBody = document.getElementById('toastBody');
+            const toastTitle = document.getElementById('toastTitle');
+            
+            toastBody.textContent = message;
+            
+            // Set toast style based on type
+            toast.className = 'toast';
+            if (type === 'success') {
+                toast.classList.add('bg-success', 'text-white');
+                toastTitle.textContent = 'Success';
+            } else if (type === 'error') {
+                toast.classList.add('bg-danger', 'text-white');
+                toastTitle.textContent = 'Error';
+            } else {
+                toast.classList.add('bg-info', 'text-white');
+                toastTitle.textContent = 'Info';
+            }
+            
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+        }
+
+        function showAddToCrmModal(assignmentId) {
+            showLoading(true);
+            fetch(`/api/team-leads/assignment/${assignmentId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('assignmentId').value = assignmentId;
+                        document.getElementById('crmCustomerName').value = data.customer_name;
+                        document.getElementById('crmMobileNumber').value = data.mobile;
+                        document.getElementById('crmCarRegistration').value = data.car_registration || '';
+                        document.getElementById('crmFollowupDate').value = data.followup_date;
+                        document.getElementById('crmStatus').value = data.status;
+                        document.getElementById('crmRemarks').value = data.remarks || '';
+                        new bootstrap.Modal(document.getElementById('addToCrmModal')).show();
+                    } else {
+                        showToast(data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    showToast('Error fetching assignment details', 'error');
+                })
+                .finally(() => {
+                    showLoading(false);
+                });
+        }
+
+        function saveAddToCrm() {
+            const assignmentId = document.getElementById('assignmentId').value;
+            const customerName = document.getElementById('crmCustomerName').value;
+            const mobileNumber = document.getElementById('crmMobileNumber').value;
+            const carRegistration = document.getElementById('crmCarRegistration').value;
+            const followupDate = document.getElementById('crmFollowupDate').value;
+            const status = document.getElementById('crmStatus').value;
+            const remarks = document.getElementById('crmRemarks').value;
+
+            if (!customerName || !mobileNumber) {
+                showToast('Customer Name and Mobile Number are required', 'error');
+                return;
+            }
+
+            if (!followupDate) {
+                showToast('Follow-up Date is required', 'error');
+                return;
+            }
+
+            showLoading(true);
+            fetch(`/api/team-leads/add-to-crm/${assignmentId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    customer_name: customerName,
+                    mobile: mobileNumber,
+                    car_registration: carRegistration,
+                    followup_date: followupDate,
+                    status: status,
+                    remarks: remarks
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('addToCrmModal')).hide();
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('Error adding lead to CRM', 'error');
+            })
+            .finally(() => {
+                showLoading(false);
+            });
         }
     </script>
 </body>

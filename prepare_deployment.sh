@@ -25,7 +25,7 @@ find deployment -type f -name ".DS_Store" -delete
 
 # Create deployment zip
 cd deployment
-zip -r ../deployment.zip . -x "*.pyc" "*.pyo" "*.pyd" "__pycache__/*" "*.so" "*.egg" "*.egg-info" "*.DS_Store"
+zip -r ../deployment1.zip . -x "*.pyc" "*.pyo" "*.pyd" "__pycache__/*" "*.so" "*.egg" "*.egg-info" "*.DS_Store"
 cd ..
 
-echo "Deployment package created as deployment.zip" 
+echo "Deployment package created as deployment1.zip" 

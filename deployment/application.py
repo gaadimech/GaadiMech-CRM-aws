@@ -839,7 +839,17 @@ def dashboard():
         if base_conditions:
             current_followups_query = current_followups_query.filter(*base_conditions)
         
-        current_followups = current_followups_query.order_by(Lead.followup_date.asc()).all()
+        # Add status ordering
+        status_order = db.case(
+            (Lead.status == 'Confirmed', 1),
+            (Lead.status == 'Open', 2),
+            (Lead.status == 'Completed', 3),
+            (Lead.status == 'Feedback', 4),
+            (Lead.status == 'Needs Followup', 5),
+            (Lead.status == 'Did Not Pick Up', 6),
+            else_=7
+        )
+        current_followups = current_followups_query.order_by(status_order, Lead.followup_date.asc()).all()
         
         # Convert followups to IST for display
         for followup in current_followups:
@@ -956,6 +966,85 @@ def dashboard():
         print(f"Dashboard error: {str(e)}")
         flash('Dashboard temporarily unavailable. Please try again.', 'error')
         return redirect(url_for('index'))
+
+@application.route('/api/dashboard/followup/<int:lead_id>', methods=['GET'])
+@login_required
+def get_followup_details(lead_id):
+    try:
+        lead = Lead.query.get_or_404(lead_id)
+        
+        # Check permissions
+        if not current_user.is_admin and lead.creator_id != current_user.id:
+            return jsonify({'success': False, 'message': 'Permission denied'})
+        
+        # Convert followup date to IST for display
+        followup_date = utc_to_ist(lead.followup_date) if lead.followup_date else None
+        
+        return jsonify({
+            'success': True,
+            'customer_name': lead.customer_name,
+            'mobile': lead.mobile,
+            'car_registration': lead.car_registration,
+            'followup_date': followup_date.strftime('%Y-%m-%d') if followup_date else None,
+            'status': lead.status,
+            'remarks': lead.remarks
+        })
+        
+    except Exception as e:
+        print(f"Error fetching followup details: {e}")
+        return jsonify({'success': False, 'message': 'Error fetching followup details'})
+
+@application.route('/api/dashboard/update-followup', methods=['POST'])
+@login_required
+def update_followup():
+    try:
+        data = request.get_json()
+        lead_id = data.get('lead_id')
+        customer_name = data.get('customer_name')
+        mobile = data.get('mobile')
+        car_registration = data.get('car_registration')
+        followup_date = data.get('followup_date')
+        status = data.get('status')
+        remarks = data.get('remarks')
+        
+        lead = Lead.query.get_or_404(lead_id)
+        
+        # Check permissions
+        if not current_user.is_admin and lead.creator_id != current_user.id:
+            return jsonify({'success': False, 'message': 'Permission denied'})
+        
+        # Store old followup date for tracking
+        old_followup_date = lead.followup_date
+        
+        # Update lead details
+        lead.customer_name = customer_name
+        lead.mobile = mobile
+        lead.car_registration = car_registration
+        
+        # Update followup date
+        followup_datetime = datetime.strptime(followup_date, '%Y-%m-%d')
+        new_followup_date = ist.localize(followup_datetime)
+        lead.followup_date = new_followup_date
+        
+        lead.status = status
+        lead.remarks = remarks
+        lead.modified_at = datetime.now(ist)
+        
+        db.session.commit()
+        
+        # Record that this lead has been worked upon if followup date changed
+        if old_followup_date != new_followup_date:
+            record_worked_lead(lead_id, current_user.id, old_followup_date, new_followup_date)
+        
+        # Clear any cached queries to ensure dashboard gets fresh data
+        db.session.expire_all()
+        
+        return jsonify({'success': True, 'message': 'Followup updated successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating followup: {e}")
+        return jsonify({'success': False, 'message': 'Error updating followup'})
 
 @application.route('/followups')
 @login_required
@@ -1188,7 +1277,10 @@ def team_leads():
         today = datetime.now(ist).date()
         
         # Get assignments for current user for today
-        assignments_query = TeamAssignment.query.filter(
+        assignments_query = TeamAssignment.query.join(
+            UnassignedLead,
+            TeamAssignment.unassigned_lead_id == UnassignedLead.id
+        ).filter(
             TeamAssignment.assigned_to_user_id == current_user.id,
             TeamAssignment.assigned_date == today
         )
@@ -1207,13 +1299,18 @@ def team_leads():
                 pass
         
         if search:
-            assignments_query = assignments_query.join(UnassignedLead).filter(
+            assignments_query = assignments_query.filter(
                 db.or_(
                     UnassignedLead.customer_name.ilike(f'%{search}%'),
                     UnassignedLead.car_manufacturer.ilike(f'%{search}%'),
                     UnassignedLead.car_model.ilike(f'%{search}%')
                 )
             )
+        
+        # Add options to load the unassigned_lead relationship eagerly
+        assignments_query = assignments_query.options(
+            db.joinedload(TeamAssignment.unassigned_lead)
+        )
         
         assignments = assignments_query.order_by(TeamAssignment.assigned_at.desc()).all()
         
@@ -1256,8 +1353,52 @@ def edit_unassigned_lead(lead_id):
             if scheduled_date:
                 lead.scheduled_date = ist.localize(datetime.strptime(scheduled_date, '%Y-%m-%d'))
             
+            # Handle team assignment
+            assign_to = request.form.get('assign_to')
+            if assign_to:
+                # Convert to int since form data comes as string
+                assign_to = int(assign_to)
+                
+                # Check if there's an existing assignment for today
+                today = datetime.now(ist).date()
+                existing_assignment = TeamAssignment.query.filter(
+                    TeamAssignment.unassigned_lead_id == lead.id,
+                    TeamAssignment.assigned_date == today
+                ).first()
+                
+                if existing_assignment:
+                    if existing_assignment.assigned_to_user_id != assign_to:
+                        # Update existing assignment
+                        existing_assignment.assigned_to_user_id = assign_to
+                        existing_assignment.assigned_at = datetime.now(ist)
+                        existing_assignment.assigned_by = current_user.id
+                        existing_assignment.status = 'Assigned'  # Reset status for new assignment
+                        flash('Lead reassigned successfully!', 'success')
+                else:
+                    # Create new assignment
+                    new_assignment = TeamAssignment(
+                        unassigned_lead_id=lead.id,
+                        assigned_to_user_id=assign_to,
+                        assigned_date=today,
+                        assigned_at=datetime.now(ist),
+                        assigned_by=current_user.id,
+                        status='Assigned'
+                    )
+                    db.session.add(new_assignment)
+                    flash('Lead assigned successfully!', 'success')
+            else:
+                # If no team member selected, remove today's assignment if it exists
+                today = datetime.now(ist).date()
+                existing_assignment = TeamAssignment.query.filter(
+                    TeamAssignment.unassigned_lead_id == lead.id,
+                    TeamAssignment.assigned_date == today
+                ).first()
+                
+                if existing_assignment:
+                    db.session.delete(existing_assignment)
+                    flash('Lead unassigned successfully!', 'success')
+            
             db.session.commit()
-            flash('Unassigned lead updated successfully!', 'success')
             return redirect(url_for('admin_leads'))
         
         # Get team members for assignment dropdown
@@ -1274,10 +1415,175 @@ def edit_unassigned_lead(lead_id):
                              current_assignment=current_assignment)
         
     except Exception as e:
-        db.session.rollback()
         print(f"Edit unassigned lead error: {str(e)}")
-        flash('Error updating unassigned lead. Please try again.', 'error')
+        flash('Error updating lead. Please try again.', 'error')
         return redirect(url_for('admin_leads'))
+
+@application.route('/api/team-leads/assignment/<int:assignment_id>', methods=['GET'])
+@login_required
+def get_assignment_details(assignment_id):
+    try:
+        # Get the assignment
+        assignment = TeamAssignment.query.get_or_404(assignment_id)
+        
+        # Check if user has permission to view this assignment
+        if assignment.assigned_to_user_id != current_user.id:
+            return jsonify({'success': False, 'message': 'Permission denied'})
+        
+        # Check if already added to CRM
+        if assignment.added_to_crm:
+            return jsonify({'success': False, 'message': 'This lead has already been added to CRM'})
+        
+        # Get the unassigned lead data
+        unassigned_lead = assignment.unassigned_lead
+        
+        # Prepare the combined remarks
+        combined_remarks = f"Added from team assignment. Original source: {unassigned_lead.source or 'Unknown'}. "
+        combined_remarks += f"Service: {unassigned_lead.service_type or 'Not specified'}. "
+        combined_remarks += f"Car: {unassigned_lead.car_manufacturer or ''} {unassigned_lead.car_model or ''}. "
+        combined_remarks += f"Pickup: {unassigned_lead.pickup_type or 'Not specified'}. "
+        combined_remarks += f"Original remarks: {unassigned_lead.remarks or 'None'}"
+        
+        return jsonify({
+            'success': True,
+            'customer_name': unassigned_lead.customer_name or 'Unknown Customer',
+            'mobile': unassigned_lead.mobile,
+            'car_registration': '',  # Default empty, user can edit
+            'followup_date': (datetime.now(ist) + timedelta(days=1)).strftime('%Y-%m-%d'),  # Default to tomorrow
+            'status': 'Needs Followup',
+            'remarks': combined_remarks
+        })
+        
+    except Exception as e:
+        print(f"Error fetching assignment details: {e}")
+        return jsonify({'success': False, 'message': 'Error fetching assignment details'})
+
+@application.route('/api/team-leads/add-to-crm/<int:assignment_id>', methods=['POST'])
+@login_required
+def add_to_crm_with_details(assignment_id):
+    try:
+        data = request.get_json()
+        customer_name = data.get('customer_name')
+        mobile = data.get('mobile')
+        car_registration = data.get('car_registration', '')
+        followup_date = data.get('followup_date')
+        status = data.get('status', 'Needs Followup')
+        remarks = data.get('remarks', '')
+        
+        # Get the assignment
+        assignment = TeamAssignment.query.get_or_404(assignment_id)
+        
+        # Check if user has permission to add this assignment to CRM
+        if assignment.assigned_to_user_id != current_user.id:
+            return jsonify({'success': False, 'message': 'Permission denied'})
+        
+        # Check if already added to CRM
+        if assignment.added_to_crm:
+            return jsonify({'success': False, 'message': 'This lead has already been added to CRM'})
+        
+        # Validate required fields
+        if not customer_name or not mobile:
+            return jsonify({'success': False, 'message': 'Customer Name and Mobile Number are required'})
+        
+        # Clean mobile number
+        mobile = re.sub(r'[^\d]', '', mobile)
+        if len(mobile) not in [10, 12]:
+            return jsonify({'success': False, 'message': 'Mobile number must be 10 or 12 digits only'})
+        
+        # Parse followup date
+        followup_datetime = datetime.strptime(followup_date, '%Y-%m-%d')
+        followup_date_ist = ist.localize(followup_datetime)
+        
+        # Create a new lead in the main CRM system
+        new_lead = Lead(
+            customer_name=customer_name,
+            mobile=mobile,
+            car_registration=car_registration,
+            followup_date=followup_date_ist,
+            remarks=remarks,
+            status=status,
+            creator_id=current_user.id,
+            created_at=datetime.now(ist),
+            modified_at=datetime.now(ist)
+        )
+        
+        # Add the new lead to the database
+        db.session.add(new_lead)
+        
+        # Mark the assignment as added to CRM
+        assignment.added_to_crm = True
+        assignment.status = 'Added to CRM'
+        assignment.processed_at = datetime.now(ist)
+        
+        # Commit the changes
+        db.session.commit()
+        
+        # Clear any cached queries to ensure fresh data
+        db.session.expire_all()
+        
+        return jsonify({'success': True, 'message': 'Lead successfully added to CRM!'})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error adding to CRM: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error adding lead to CRM. Please try again.'})
+
+@application.route('/add_to_crm/<int:assignment_id>', methods=['POST'])
+@login_required
+def add_to_crm(assignment_id):
+    try:
+        # Get the assignment
+        assignment = TeamAssignment.query.get_or_404(assignment_id)
+        
+        # Check if user has permission to add this assignment to CRM
+        if assignment.assigned_to_user_id != current_user.id:
+            flash('Access denied. You can only add your own assigned leads to CRM.', 'error')
+            return redirect(url_for('team_leads'))
+        
+        # Check if already added to CRM
+        if assignment.added_to_crm:
+            flash('This lead has already been added to CRM.', 'info')
+            return redirect(url_for('team_leads'))
+        
+        # Get the unassigned lead data
+        unassigned_lead = assignment.unassigned_lead
+        
+        # Create a new lead in the main CRM system
+        new_lead = Lead(
+            customer_name=unassigned_lead.customer_name or 'Unknown Customer',
+            mobile=unassigned_lead.mobile,
+            car_registration='',  # Can be updated later
+            followup_date=datetime.now(ist) + timedelta(days=1),  # Default to tomorrow
+            remarks=f"Added from team assignment. Original source: {unassigned_lead.source or 'Unknown'}. "
+                   f"Service: {unassigned_lead.service_type or 'Not specified'}. "
+                   f"Car: {unassigned_lead.car_manufacturer or ''} {unassigned_lead.car_model or ''}. "
+                   f"Pickup: {unassigned_lead.pickup_type or 'Not specified'}. "
+                   f"Original remarks: {unassigned_lead.remarks or 'None'}",
+            status='Needs Followup',
+            creator_id=current_user.id,
+            created_at=datetime.now(ist),
+            modified_at=datetime.now(ist)
+        )
+        
+        # Add the new lead to the database
+        db.session.add(new_lead)
+        
+        # Mark the assignment as added to CRM
+        assignment.added_to_crm = True
+        assignment.status = 'Added to CRM'
+        assignment.processed_at = datetime.now(ist)
+        
+        # Commit the changes
+        db.session.commit()
+        
+        flash('Lead successfully added to CRM!', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error adding to CRM: {str(e)}")
+        flash('Error adding lead to CRM. Please try again.', 'error')
+    
+    return redirect(url_for('team_leads'))
 
 # Error handlers
 @application.errorhandler(404)
