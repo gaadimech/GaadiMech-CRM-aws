@@ -1,0 +1,20 @@
+{
+  "name": "gaadimech-crm-aws",
+  "version": "1.0.0",
+  "description": "A comprehensive Customer Relationship Management (CRM) system built with Flask for tracking telecaller performance and lead management.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.11"
+  }
+}

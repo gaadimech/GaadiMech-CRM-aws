@@ -231,6 +231,19 @@
             color: white !important;
         }
         
+        /* WhatsApp button styling */
+        .whatsapp-btn {
+            background-color: #25D366 !important;
+            border-color: #25D366 !important;
+            color: white !important;
+        }
+        
+        .whatsapp-btn:hover {
+            background-color: #128C7E !important;
+            border-color: #128C7E !important;
+            color: white !important;
+        }
+        
         /* Mobile responsive tables */
         .mobile-table {
             display: none;
@@ -276,6 +289,64 @@
             padding: 5px 10px;
         }
         
+        /* Ensure WhatsApp button is visible on mobile */
+        .mobile-card-actions .whatsapp-btn {
+            background-color: #25D366 !important;
+            border-color: #25D366 !important;
+            color: white !important;
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        .mobile-card-actions .whatsapp-btn:hover {
+            background-color: #128C7E !important;
+            border-color: #128C7E !important;
+            color: white !important;
+        }
+        
+        /* Performance mobile card styling */
+        .performance-mobile-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        
+        .performance-rank-badge {
+            position: absolute;
+            top: -8px;
+            left: -8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+        
+        /* Ensure all WhatsApp buttons are visible on mobile */
+        .whatsapp-btn {
+            background-color: #25D366 !important;
+            border-color: #25D366 !important;
+            color: white !important;
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        .whatsapp-btn:hover {
+            background-color: #128C7E !important;
+            border-color: #128C7E !important;
+            color: white !important;
+        }
+        
         /* Form controls mobile optimization */
         .form-control,
         .form-select {
@@ -284,6 +355,32 @@
         }
         
         /* Quick stats mobile layout */
+        .quick-stats-mobile {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .quick-stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .quick-stat-item:last-child {
+            border-bottom: none;
+        }
+        
+        .quick-stat-number {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
         .quick-stat-label {
             font-size: 0.8rem;
             color: #666;

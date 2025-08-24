@@ -554,6 +554,30 @@ def edit_lead(lead_id):
     
     return render_template('edit_lead.html', lead=lead)
 
+@application.route('/delete_lead/<int:lead_id>', methods=['POST'])
+@login_required
+def delete_lead(lead_id):
+    try:
+        lead = Lead.query.get_or_404(lead_id)
+        
+        # Check permissions - only admin or creator can delete
+        if not current_user.is_admin and lead.creator_id != current_user.id:
+            return jsonify({'success': False, 'message': 'Permission denied'})
+        
+        # Delete the lead
+        db.session.delete(lead)
+        db.session.commit()
+        
+        # Clear any cached queries to ensure dashboard gets fresh data
+        db.session.expire_all()
+        
+        return jsonify({'success': True, 'message': 'Lead deleted successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting lead: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error deleting lead'})
+
 @application.route('/api/dashboard/status-update', methods=['POST'])
 @login_required
 def update_lead_status():
@@ -1206,6 +1230,15 @@ def admin_leads():
             scheduled_date = request.form.get('scheduled_date')
             assign_to = request.form.get('assign_to')
             
+            # Convert empty strings to None for database constraints
+            customer_name = customer_name.strip() if customer_name else None
+            car_manufacturer = car_manufacturer.strip() if car_manufacturer else None
+            car_model = car_model.strip() if car_model else None
+            pickup_type = pickup_type.strip() if pickup_type else None
+            service_type = service_type.strip() if service_type else None
+            source = source.strip() if source else None
+            remarks = remarks.strip() if remarks else None
+            
             # Validate required fields
             if not mobile:
                 flash('Mobile number is required', 'error')
@@ -1419,15 +1452,15 @@ def edit_unassigned_lead(lead_id):
         lead = UnassignedLead.query.get_or_404(lead_id)
         
         if request.method == 'POST':
-            # Update lead details
-            lead.customer_name = request.form.get('customer_name')
+            # Update lead details - convert empty strings to None for database constraints
+            lead.customer_name = request.form.get('customer_name').strip() if request.form.get('customer_name') else None
             lead.mobile = request.form.get('mobile')
-            lead.car_manufacturer = request.form.get('car_manufacturer')
-            lead.car_model = request.form.get('car_model')
-            lead.pickup_type = request.form.get('pickup_type')
-            lead.service_type = request.form.get('service_type')
-            lead.source = request.form.get('source')
-            lead.remarks = request.form.get('remarks')
+            lead.car_manufacturer = request.form.get('car_manufacturer').strip() if request.form.get('car_manufacturer') else None
+            lead.car_model = request.form.get('car_model').strip() if request.form.get('car_model') else None
+            lead.pickup_type = request.form.get('pickup_type').strip() if request.form.get('pickup_type') else None
+            lead.service_type = request.form.get('service_type').strip() if request.form.get('service_type') else None
+            lead.source = request.form.get('source').strip() if request.form.get('source') else None
+            lead.remarks = request.form.get('remarks').strip() if request.form.get('remarks') else None
             
             # Handle scheduled date
             scheduled_date = request.form.get('scheduled_date')

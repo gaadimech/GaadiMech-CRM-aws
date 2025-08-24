@@ -11,6 +11,7 @@ mkdir -p deployment/migrations
 
 # Copy application files
 cp application.py deployment/
+cp text_parser.py deployment/
 cp requirements.txt deployment/
 cp Procfile deployment/
 cp -r migrations/* deployment/migrations/
