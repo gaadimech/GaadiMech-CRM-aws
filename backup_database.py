@@ -21,7 +21,8 @@ DB_PARAMS = {
 
 def create_backup_directory():
     """Create backup directory if it doesn't exist"""
-    backup_dir = "Database Backup - 6th July"
+    today = datetime.now().strftime("%Y-%m-%d")
+    backup_dir = f"Database Backup - {today}"
     csv_dir = os.path.join(backup_dir, "csv_files")
     os.makedirs(csv_dir, exist_ok=True)
     return backup_dir, csv_dir
@@ -30,7 +31,7 @@ def backup_sql_dump(backup_dir):
     """Create a complete SQL dump of the database"""
     dump_file = os.path.join(backup_dir, "complete_backup.sql")
     
-    # Use PostgreSQL 17 pg_dump
+    # Use PostgreSQL 17 pg_dump (Homebrew installation)
     pg_dump_path = '/usr/local/opt/postgresql@17/bin/pg_dump'
     
     # Construct pg_dump command
