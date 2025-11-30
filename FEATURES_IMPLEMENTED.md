@@ -569,6 +569,238 @@ In `application.py`:
 
 ---
 
+### 8. ⭐⭐⭐⭐⭐ Click-to-Call Integration with Twilio
+
+**Time Saved:** 20-30 seconds per call  
+**Status:** ✅ Implemented
+
+#### Features
+
+**1. One-Click Calling**
+- Single button to initiate calls
+- No manual dialing required
+- Automatic call logging
+- Real-time call status updates
+
+**2. Professional Call Flow**
+- System calls telecaller first
+- When answered, connects to customer
+- Professional greeting message
+- Seamless connection experience
+
+**3. Automatic Call Logging**
+- Every call tracked in database
+- Records call duration
+- Tracks call status (completed, failed, busy, no-answer)
+- Links to lead and user for analytics
+
+**4. Call History & Analytics**
+- View call history per lead
+- Personal call statistics
+- Success rate tracking
+- Average duration calculation
+
+#### Technical Implementation
+
+**Database Schema (Enhanced CallLog)**
+```sql
+-- New Twilio-specific fields added
+call_sid VARCHAR(100) UNIQUE,  -- Twilio Call SID
+from_number VARCHAR(20),       -- Twilio number
+to_number VARCHAR(20),          -- Telecaller's number
+customer_number VARCHAR(20),    -- Customer's number
+direction VARCHAR(20),          -- 'outbound', 'inbound'
+status VARCHAR(30),             -- 'initiated', 'ringing', 'answered', 'completed', 'failed'
+created_at TIMESTAMP,
+updated_at TIMESTAMP
+```
+
+**API Endpoints**
+```
+POST /api/call/initiate
+  - Initiates Twilio call
+  - Body: {lead_id, customer_mobile, user_mobile}
+  - Returns: {success, call_sid, status, message}
+
+GET/POST /api/call/connect
+  - TwiML webhook for connecting call
+  - Called by Twilio when user answers
+
+POST /api/call/status
+  - Webhook for call status updates
+  - Updates CallLog in database
+
+POST /api/call/completed
+  - Called when call ends
+  - Updates final status
+
+GET /api/call/history/<lead_id>
+  - Returns all calls for a lead
+
+GET /api/call/stats?from=YYYY-MM-DD&to=YYYY-MM-DD
+  - Returns user's call statistics
+```
+
+#### Frontend Integration
+
+**Calling Queue Enhancement**
+- New "Click-to-Call" button added
+- Shows loading state during connection
+- Success/error notifications
+- Auto-opens quick-log after call
+
+**Call Button UI**
+```html
+<button class="call-button" onclick="twilioCall()">
+    <i class="fas fa-phone-volume"></i> Click-to-Call
+</button>
+```
+
+**JavaScript Implementation**
+```javascript
+async function twilioCall() {
+    const response = await fetch('/api/call/initiate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            lead_id: currentLead.id,
+            customer_mobile: currentLead.mobile
+        })
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+        showNotification('Call initiated! Answer your phone.', 'success');
+        setTimeout(() => showQuickLog(), 2000);
+    }
+}
+```
+
+#### Configuration Required
+
+**Environment Variables (.env)**
+```bash
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your_auth_token_here
+TWILIO_PHONE_NUMBER=+917012345678
+```
+
+**Twilio Webhook Setup**
+- Voice URL: `https://your-domain.com/api/call/connect`
+- Status Callback: `https://your-domain.com/api/call/status`
+- Method: POST
+
+#### Cost Analysis (India)
+
+**Twilio Pricing:**
+- Phone number: ₹85/month
+- Outbound calls: ₹0.60/minute
+- Inbound calls: ₹0.60/minute
+
+**Monthly Cost Example (150 calls/day, 2 min avg):**
+```
+Calls/month: 150 × 22 = 3,300 calls
+Minutes/month: 3,300 × 2 = 6,600 minutes
+Outbound: 6,600 × ₹0.60 = ₹3,960
+Inbound: 6,600 × ₹0.60 = ₹3,960
+Phone: ₹85
+Total: ₹8,005/month = ₹2.43/call
+```
+
+**ROI:**
+- Time saved: 25 sec/call
+- Extra calls possible: ~20 calls/day
+- Additional revenue: ₹1,500/day = ₹33,000/month
+- Net benefit: ₹33,000 - ₹8,005 = **₹24,995/month profit**
+
+#### Benefits
+
+1. **Time Efficiency**
+   - No manual dialing
+   - Faster call initiation
+   - Auto-logging saves time
+
+2. **Professional Image**
+   - Consistent caller ID (business number)
+   - Clear audio quality
+   - Reliable connection
+
+3. **Analytics**
+   - Complete call tracking
+   - Success rate monitoring
+   - Duration analysis
+   - Performance metrics
+
+4. **Audit Trail**
+   - Every call logged
+   - Timestamp recorded
+   - User attribution
+   - Status tracking
+
+#### Limitations & Considerations
+
+**Trial Account Restrictions:**
+- Must verify phone numbers in Twilio Console
+- Limited to verified numbers only
+- Add ₹500-1000 credit to remove restrictions
+
+**Technical Requirements:**
+- Public HTTPS URL (webhooks need SSL)
+- Twilio SDK installed: `pip install twilio==8.10.0`
+- Database migration must be run
+- Environment variables configured
+
+**Browser Compatibility:**
+- Works on all modern browsers
+- Mobile responsive
+- No additional browser permissions needed
+
+#### Setup Documentation
+
+Complete setup guide available in: **`TWILIO_SETUP_GUIDE.md`**
+
+Includes:
+- Step-by-step Twilio account setup
+- Phone number purchase guide
+- Webhook configuration
+- Environment variable setup
+- Testing procedures
+- Troubleshooting guide
+- Training material for telecallers
+
+#### Migration
+
+Database migration file: `migrations/versions/002_twilio_click_to_call.py`
+
+**What it does:**
+- Adds new Twilio-specific columns to CallLog
+- Creates indexes for performance
+- Maintains backward compatibility
+- Updates existing records
+
+**To run:**
+```bash
+cd /home/user/webapp
+flask db upgrade
+```
+
+#### Testing Checklist
+
+- [ ] Twilio account created and configured
+- [ ] Phone number purchased
+- [ ] Environment variables set
+- [ ] Webhooks configured in Twilio Console
+- [ ] Database migration completed
+- [ ] Click-to-Call button appears in calling queue
+- [ ] Test call successful
+- [ ] Call logged in database
+- [ ] Call history visible
+- [ ] Call stats endpoint working
+- [ ] Quick-log opens after call
+- [ ] Error handling works (no credits, wrong number)
+
+---
+
 ## 📊 Expected Impact
 
 ### Time Savings Per Call

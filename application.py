@@ -23,6 +23,15 @@ except ImportError:
     def parse_customer_text(text):
         return {"error": "Text parser not available"}
 
+# Try to import Twilio with fallback
+try:
+    from twilio.rest import Client
+    from twilio.twiml.voice_response import VoiceResponse
+    TWILIO_AVAILABLE = True
+except ImportError:
+    TWILIO_AVAILABLE = False
+    print("Twilio not available - Click-to-Call will be disabled")
+
 application = Flask(__name__)
 application.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'GaadiMech2024!')
 
@@ -278,23 +287,43 @@ class LeadScore(db.Model):
 class CallLog(db.Model):
     """
     Tracks all call activities for analytics and audit trail.
+    Enhanced to support Twilio Click-to-Call integration.
     """
     id = db.Column(db.Integer, primary_key=True)
-    lead_id = db.Column(db.Integer, db.ForeignKey('lead.id'), nullable=False)
+    lead_id = db.Column(db.Integer, db.ForeignKey('lead.id'), nullable=True)  # Nullable for non-lead calls
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    call_type = db.Column(db.String(20), nullable=False)  # 'outgoing', 'incoming'
-    call_status = db.Column(db.String(30), nullable=False)  # 'answered', 'not_answered', 'busy', 'no_response'
+    
+    # Twilio-specific fields
+    call_sid = db.Column(db.String(100), unique=True, nullable=True)  # Twilio Call SID
+    from_number = db.Column(db.String(20))  # Caller ID (Twilio number)
+    to_number = db.Column(db.String(20))  # User's number
+    customer_number = db.Column(db.String(20))  # Customer's number
+    
+    # Call metadata
+    direction = db.Column(db.String(20), nullable=False, default='outbound')  # 'outbound', 'inbound'
+    status = db.Column(db.String(30), nullable=False, default='initiated')  # 'initiated', 'ringing', 'answered', 'completed', 'failed', 'busy', 'no-answer'
     duration = db.Column(db.Integer, default=0)  # in seconds
     notes = db.Column(db.Text)
     recording_url = db.Column(db.String(500))  # URL to call recording if available
-    call_started_at = db.Column(db.DateTime, default=lambda: datetime.now(ist))
-    call_ended_at = db.Column(db.DateTime)
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC), onupdate=lambda: datetime.now(pytz.UTC))
+    
+    # Legacy fields for backwards compatibility
+    call_type = db.Column(db.String(20))  # Deprecated - use 'direction' instead
+    call_status = db.Column(db.String(30))  # Deprecated - use 'status' instead
+    call_started_at = db.Column(db.DateTime)  # Deprecated - use 'created_at' instead
+    call_ended_at = db.Column(db.DateTime)  # Deprecated - use 'updated_at' instead
     
     lead = db.relationship('Lead', backref='call_logs')
     user = db.relationship('User', backref='call_logs')
     
     __table_args__ = (
-        db.Index('idx_call_log_user_date', 'user_id', 'call_started_at'),
+        db.Index('idx_call_log_user_date', 'user_id', 'created_at'),
+        db.Index('idx_call_log_lead', 'lead_id'),
+        db.Index('idx_call_log_status', 'status'),
+        db.Index('idx_call_log_sid', 'call_sid'),
     )
 
 @login_manager.user_loader
@@ -349,6 +378,250 @@ def open_whatsapp(mobile):
         whatsapp_url = f"https://web.whatsapp.com/send?phone={cleaned_mobile}"
     
     return jsonify({'url': whatsapp_url})
+
+# ==========================================
+# CLICK-TO-CALL WITH TWILIO INTEGRATION
+# ==========================================
+
+@application.route('/api/call/initiate', methods=['POST'])
+@login_required
+@limiter.limit("60 per minute")
+def initiate_call():
+    """
+    Initiate a call using Twilio Click-to-Call
+    Request body: {
+        "lead_id": 123,
+        "customer_mobile": "9876543210",
+        "user_mobile": "9123456789"  # Optional: telecaller's mobile
+    }
+    """
+    if not TWILIO_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Twilio integration is not configured'
+        }), 503
+    
+    try:
+        data = request.get_json()
+        lead_id = data.get('lead_id')
+        customer_mobile = data.get('customer_mobile')
+        user_mobile = data.get('user_mobile', current_user.username)  # Fallback to username
+        
+        # Validate inputs
+        if not customer_mobile:
+            return jsonify({
+                'success': False,
+                'error': 'Customer mobile number is required'
+            }), 400
+        
+        # Clean and format mobile numbers
+        customer_mobile = ''.join(filter(str.isdigit, customer_mobile))
+        user_mobile = ''.join(filter(str.isdigit, str(user_mobile)))
+        
+        # Add country code if not present (India: +91)
+        if len(customer_mobile) == 10:
+            customer_mobile = '+91' + customer_mobile
+        elif not customer_mobile.startswith('+'):
+            customer_mobile = '+' + customer_mobile
+            
+        if len(user_mobile) == 10:
+            user_mobile = '+91' + user_mobile
+        elif not user_mobile.startswith('+'):
+            user_mobile = '+' + user_mobile
+        
+        # Get Twilio credentials from environment
+        twilio_account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+        twilio_auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+        twilio_phone_number = os.getenv('TWILIO_PHONE_NUMBER')
+        
+        if not all([twilio_account_sid, twilio_auth_token, twilio_phone_number]):
+            return jsonify({
+                'success': False,
+                'error': 'Twilio credentials not configured. Please contact administrator.'
+            }), 500
+        
+        # Initialize Twilio client
+        client = Client(twilio_account_sid, twilio_auth_token)
+        
+        # Create the call
+        # Twilio will first call the user (telecaller), then connect to customer
+        call = client.calls.create(
+            url=request.url_root + f'api/call/connect?customer={customer_mobile}&lead_id={lead_id}',
+            to=user_mobile,
+            from_=twilio_phone_number,
+            status_callback=request.url_root + 'api/call/status',
+            status_callback_event=['initiated', 'ringing', 'answered', 'completed']
+        )
+        
+        # Log the call in database
+        call_log = CallLog(
+            lead_id=lead_id,
+            user_id=current_user.id,
+            call_sid=call.sid,
+            from_number=twilio_phone_number,
+            to_number=user_mobile,
+            customer_number=customer_mobile,
+            status='initiated',
+            direction='outbound',
+            created_at=datetime.now(pytz.UTC)
+        )
+        db.session.add(call_log)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'call_sid': call.sid,
+            'status': 'initiated',
+            'message': f'Calling {user_mobile}... You will be connected to {customer_mobile}'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error initiating call: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Failed to initiate call: {str(e)}'
+        }), 500
+
+@application.route('/api/call/connect', methods=['GET', 'POST'])
+def call_connect():
+    """
+    TwiML endpoint: Called when user (telecaller) answers
+    This creates the bridge to connect user to customer
+    """
+    customer_mobile = request.args.get('customer')
+    lead_id = request.args.get('lead_id')
+    
+    response = VoiceResponse()
+    
+    # Play a message to the telecaller
+    response.say('Connecting you to the customer. Please wait.', voice='alice', language='en-IN')
+    
+    # Dial the customer
+    dial = response.dial(
+        caller_id=os.getenv('TWILIO_PHONE_NUMBER'),
+        timeout=30,
+        action=request.url_root + f'api/call/completed?lead_id={lead_id}'
+    )
+    dial.number(customer_mobile)
+    
+    return str(response), 200, {'Content-Type': 'text/xml'}
+
+@application.route('/api/call/status', methods=['POST'])
+def call_status():
+    """
+    Webhook for call status updates from Twilio
+    Updates call log in database
+    """
+    try:
+        call_sid = request.form.get('CallSid')
+        call_status = request.form.get('CallStatus')
+        duration = request.form.get('CallDuration', 0)
+        
+        # Update call log
+        call_log = CallLog.query.filter_by(call_sid=call_sid).first()
+        if call_log:
+            call_log.status = call_status
+            call_log.duration = int(duration)
+            call_log.updated_at = datetime.now(pytz.UTC)
+            db.session.commit()
+        
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        print(f"Error updating call status: {str(e)}")
+        return jsonify({'success': False}), 500
+
+@application.route('/api/call/completed', methods=['POST'])
+def call_completed():
+    """
+    Called when customer call completes or fails
+    """
+    lead_id = request.args.get('lead_id')
+    dial_call_status = request.form.get('DialCallStatus')
+    
+    response = VoiceResponse()
+    
+    if dial_call_status == 'completed':
+        response.say('Call completed. Thank you.', voice='alice', language='en-IN')
+    else:
+        response.say('Customer did not answer. Please try again later.', voice='alice', language='en-IN')
+    
+    return str(response), 200, {'Content-Type': 'text/xml'}
+
+@application.route('/api/call/history/<int:lead_id>', methods=['GET'])
+@login_required
+def call_history(lead_id):
+    """
+    Get call history for a specific lead
+    """
+    try:
+        calls = CallLog.query.filter_by(lead_id=lead_id).order_by(CallLog.created_at.desc()).all()
+        
+        call_data = [{
+            'call_sid': call.call_sid,
+            'status': call.status,
+            'duration': call.duration,
+            'from_number': call.from_number,
+            'to_number': call.to_number,
+            'customer_number': call.customer_number,
+            'direction': call.direction,
+            'created_at': call.created_at.isoformat() if call.created_at else None,
+            'user_name': call.user.name if call.user else 'Unknown'
+        } for call in calls]
+        
+        return jsonify({
+            'success': True,
+            'calls': call_data
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@application.route('/api/call/stats', methods=['GET'])
+@login_required
+def call_stats():
+    """
+    Get call statistics for current user
+    """
+    try:
+        date_from = request.args.get('from', datetime.now().strftime('%Y-%m-%d'))
+        date_to = request.args.get('to', datetime.now().strftime('%Y-%m-%d'))
+        
+        # Parse dates
+        from_date = datetime.strptime(date_from, '%Y-%m-%d')
+        to_date = datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1)
+        
+        # Get call statistics
+        calls = CallLog.query.filter(
+            CallLog.user_id == current_user.id,
+            CallLog.created_at >= from_date,
+            CallLog.created_at < to_date
+        ).all()
+        
+        total_calls = len(calls)
+        completed_calls = len([c for c in calls if c.status == 'completed'])
+        failed_calls = len([c for c in calls if c.status in ['failed', 'busy', 'no-answer']])
+        total_duration = sum([c.duration for c in calls if c.duration])
+        avg_duration = total_duration / completed_calls if completed_calls > 0 else 0
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_calls': total_calls,
+                'completed_calls': completed_calls,
+                'failed_calls': failed_calls,
+                'success_rate': (completed_calls / total_calls * 100) if total_calls > 0 else 0,
+                'total_duration': total_duration,
+                'avg_duration': round(avg_duration, 2)
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @application.route('/logout')
 @login_required

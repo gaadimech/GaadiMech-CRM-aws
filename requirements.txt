@@ -29,5 +29,8 @@ Flask-Caching==2.1.0
 # Background tasks (if needed)
 APScheduler==3.11.0
 
+# Click-to-Call Integration
+twilio==8.10.0
+
 # Development tools (optional)
 memory-profiler==0.61.0 
