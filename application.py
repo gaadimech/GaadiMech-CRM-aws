@@ -60,11 +60,15 @@ application.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 }
 
 # Session configuration
+# Detect if running in production with HTTPS
+IS_PRODUCTION = os.getenv('FLASK_ENV') == 'production'
+FORCE_HTTPS = os.getenv('FORCE_HTTPS', 'false').lower() == 'true'
+
 application.config.update(
-    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_SECURE=IS_PRODUCTION or FORCE_HTTPS,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
-    REMEMBER_COOKIE_SECURE=False,
+    REMEMBER_COOKIE_SECURE=IS_PRODUCTION or FORCE_HTTPS,
     REMEMBER_COOKIE_HTTPONLY=True,
     REMEMBER_COOKIE_DURATION=timedelta(hours=24),
     PERMANENT_SESSION_LIFETIME=timedelta(hours=24)
@@ -114,16 +118,19 @@ USER_MOBILE_MAPPING = {
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(120), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)  # Increased length for hashed passwords
     name = db.Column(db.String(100), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    mobile = db.Column(db.String(15), nullable=True)  # Added mobile field
     leads = db.relationship('Lead', backref='creator', lazy=True)
 
     def set_password(self, password):
-        self.password_hash = password
+        """Hash password before storing"""
+        self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        return self.password_hash == password
+        """Verify password against hash"""
+        return check_password_hash(self.password_hash, password)
 
 class DailyFollowupCount(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -225,7 +232,69 @@ class WorkedLead(db.Model):
     user = db.relationship('User', backref='worked_leads')
     
     __table_args__ = (
-        db.UniqueConstraint('lead_id', 'user_id', 'work_date', name='unique_worked_lead_per_day'),
+        db.Index('idx_worked_lead_user_date', 'user_id', 'work_date'),
+    )
+
+class Template(db.Model):
+    """
+    Pre-defined message templates for quick remarks entry.
+    Helps telecallers save time by reusing common messages.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(100), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    category = db.Column(db.String(50), nullable=True)  # e.g., 'Interested', 'Not Interested', 'Callback', 'General'
+    is_global = db.Column(db.Boolean, default=True)  # True = available to all, False = personal
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    usage_count = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(ist))
+    
+    creator = db.relationship('User', backref='templates')
+
+class LeadScore(db.Model):
+    """
+    Stores calculated lead scores for prioritization in calling queue.
+    Score is calculated based on multiple factors.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    lead_id = db.Column(db.Integer, db.ForeignKey('lead.id'), nullable=False, unique=True)
+    score = db.Column(db.Integer, default=0)  # 0-100
+    priority = db.Column(db.String(20), default='Medium')  # High, Medium, Low
+    
+    # Score factors
+    overdue_score = db.Column(db.Integer, default=0)
+    status_score = db.Column(db.Integer, default=0)
+    engagement_score = db.Column(db.Integer, default=0)
+    recency_score = db.Column(db.Integer, default=0)
+    
+    last_calculated = db.Column(db.DateTime, default=lambda: datetime.now(ist))
+    
+    lead = db.relationship('Lead', backref='lead_score', uselist=False)
+    
+    __table_args__ = (
+        db.Index('idx_lead_score_priority', 'priority', 'score'),
+    )
+
+class CallLog(db.Model):
+    """
+    Tracks all call activities for analytics and audit trail.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    lead_id = db.Column(db.Integer, db.ForeignKey('lead.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    call_type = db.Column(db.String(20), nullable=False)  # 'outgoing', 'incoming'
+    call_status = db.Column(db.String(30), nullable=False)  # 'answered', 'not_answered', 'busy', 'no_response'
+    duration = db.Column(db.Integer, default=0)  # in seconds
+    notes = db.Column(db.Text)
+    recording_url = db.Column(db.String(500))  # URL to call recording if available
+    call_started_at = db.Column(db.DateTime, default=lambda: datetime.now(ist))
+    call_ended_at = db.Column(db.DateTime)
+    
+    lead = db.relationship('Lead', backref='call_logs')
+    user = db.relationship('User', backref='call_logs')
+    
+    __table_args__ = (
+        db.Index('idx_call_log_user_date', 'user_id', 'call_started_at'),
     )
 
 @login_manager.user_loader
@@ -258,15 +327,6 @@ def login():
             print(f"Login error: {str(e)}")
     
     return render_template('login.html')
-
-@application.before_request
-def before_request():
-    """Ensure database connection is active"""
-    try:
-        db.session.execute(text('SELECT 1'))
-    except Exception:
-        db.session.rollback()
-        raise
 
 @application.teardown_request
 def teardown_request(exception=None):
@@ -1698,6 +1758,401 @@ def add_to_crm(assignment_id):
         flash('Error adding lead to CRM. Please try again.', 'error')
     
     return redirect(url_for('team_leads'))
+
+# ==================== NEW FEATURE ROUTES ====================
+
+# Template Management Routes
+@application.route('/api/templates', methods=['GET'])
+@login_required
+def get_templates():
+    """Get all available templates for the current user"""
+    try:
+        # Get global templates and user's personal templates
+        templates = Template.query.filter(
+            db.or_(
+                Template.is_global == True,
+                Template.created_by == current_user.id
+            )
+        ).order_by(Template.category, Template.title).all()
+        
+        templates_data = [{
+            'id': t.id,
+            'title': t.title,
+            'content': t.content,
+            'category': t.category,
+            'is_global': t.is_global,
+            'usage_count': t.usage_count
+        } for t in templates]
+        
+        return jsonify({'success': True, 'templates': templates_data})
+    except Exception as e:
+        print(f"Error fetching templates: {e}")
+        return jsonify({'success': False, 'message': 'Error fetching templates'})
+
+@application.route('/api/templates/<int:template_id>/use', methods=['POST'])
+@login_required
+def use_template(template_id):
+    """Track template usage"""
+    try:
+        template = Template.query.get_or_404(template_id)
+        template.usage_count += 1
+        db.session.commit()
+        
+        return jsonify({'success': True, 'content': template.content})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'Error using template'})
+
+@application.route('/api/templates', methods=['POST'])
+@login_required
+def create_template():
+    """Create a new personal template"""
+    try:
+        data = request.get_json()
+        
+        new_template = Template(
+            title=data.get('title'),
+            content=data.get('content'),
+            category=data.get('category', 'General'),
+            is_global=False,  # Personal templates are not global
+            created_by=current_user.id
+        )
+        
+        db.session.add(new_template)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Template created successfully'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating template: {e}")
+        return jsonify({'success': False, 'message': 'Error creating template'})
+
+# Quick-Log API Routes
+@application.route('/api/quick-log/<int:lead_id>', methods=['POST'])
+@login_required
+def quick_log(lead_id):
+    """Quick-log lead update - fast status and remarks update"""
+    try:
+        data = request.get_json()
+        lead = Lead.query.get_or_404(lead_id)
+        
+        # Check permissions
+        if not current_user.is_admin and lead.creator_id != current_user.id:
+            return jsonify({'success': False, 'message': 'Permission denied'})
+        
+        # Store old followup date for tracking
+        old_followup_date = lead.followup_date
+        
+        # Update fields
+        if 'status' in data:
+            lead.status = data['status']
+        
+        if 'remarks' in data and data['remarks']:
+            # Append new remarks with timestamp
+            timestamp = datetime.now(ist).strftime('%Y-%m-%d %H:%M')
+            new_remark = f"[{timestamp}] {data['remarks']}"
+            if lead.remarks:
+                lead.remarks = f"{lead.remarks}\n{new_remark}"
+            else:
+                lead.remarks = new_remark
+        
+        if 'followup_date' in data:
+            followup_datetime = datetime.strptime(data['followup_date'], '%Y-%m-%d')
+            new_followup_date = ist.localize(followup_datetime)
+            lead.followup_date = new_followup_date
+        
+        lead.modified_at = datetime.now(ist)
+        db.session.commit()
+        
+        # Record worked lead if followup date changed
+        if old_followup_date != lead.followup_date:
+            record_worked_lead(lead_id, current_user.id, old_followup_date, lead.followup_date)
+        
+        # Log the call activity
+        if 'call_duration' in data:
+            call_log = CallLog(
+                lead_id=lead_id,
+                user_id=current_user.id,
+                call_type='outgoing',
+                call_status=data.get('call_status', 'answered'),
+                duration=data.get('call_duration', 0),
+                notes=data.get('remarks', ''),
+                call_started_at=datetime.now(ist)
+            )
+            db.session.add(call_log)
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Lead updated successfully',
+            'lead': {
+                'id': lead.id,
+                'status': lead.status,
+                'followup_date': lead.followup_date.strftime('%Y-%m-%d') if lead.followup_date else None
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error in quick-log: {e}")
+        return jsonify({'success': False, 'message': 'Error updating lead'})
+
+# Calling Queue Routes
+@application.route('/api/calling-queue', methods=['GET'])
+@login_required
+def get_calling_queue():
+    """Get prioritized calling queue for current user"""
+    try:
+        today = datetime.now(ist).date()
+        target_start = ist.localize(datetime.combine(today, datetime.min.time()))
+        target_end = target_start + timedelta(days=1)
+        target_start_utc = target_start.astimezone(pytz.UTC)
+        target_end_utc = target_end.astimezone(pytz.UTC)
+        
+        # Get today's followups for current user
+        leads = Lead.query.filter(
+            Lead.creator_id == current_user.id,
+            Lead.followup_date >= target_start_utc,
+            Lead.followup_date < target_end_utc
+        ).all()
+        
+        # Calculate scores for each lead
+        scored_leads = []
+        for lead in leads:
+            score = calculate_lead_score(lead)
+            scored_leads.append({
+                'lead': lead,
+                'score': score['total_score'],
+                'priority': score['priority']
+            })
+        
+        # Sort by score (highest first)
+        scored_leads.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Convert to JSON
+        queue_data = []
+        for item in scored_leads[:50]:  # Limit to top 50
+            lead = item['lead']
+            queue_data.append({
+                'id': lead.id,
+                'customer_name': lead.customer_name,
+                'mobile': lead.mobile,
+                'car_registration': lead.car_registration,
+                'status': lead.status,
+                'remarks': lead.remarks,
+                'followup_date': lead.followup_date.strftime('%Y-%m-%d %H:%M') if lead.followup_date else None,
+                'score': item['score'],
+                'priority': item['priority']
+            })
+        
+        return jsonify({
+            'success': True,
+            'queue': queue_data,
+            'total_count': len(queue_data)
+        })
+        
+    except Exception as e:
+        print(f"Error fetching calling queue: {e}")
+        return jsonify({'success': False, 'message': 'Error fetching queue'})
+
+def calculate_lead_score(lead):
+    """
+    Calculate priority score for a lead.
+    Score factors:
+    - Overdue leads: +50 points
+    - Status 'Confirmed': +40 points
+    - Status 'Needs Followup': +30 points
+    - Recent activity: +20 points
+    - First-time lead: +10 points
+    """
+    score = 0
+    
+    # Check if overdue
+    now_utc = datetime.now(pytz.UTC)
+    if lead.followup_date < now_utc:
+        days_overdue = (now_utc - lead.followup_date).days
+        score += min(50, 10 * days_overdue)  # Max 50 points
+    
+    # Status-based score
+    status_scores = {
+        'Confirmed': 40,
+        'Needs Followup': 30,
+        'Open': 25,
+        'Did Not Pick Up': 15,
+        'Completed': 5,
+        'Feedback': 5
+    }
+    score += status_scores.get(lead.status, 0)
+    
+    # Engagement score (has remarks = engaged)
+    if lead.remarks and len(lead.remarks) > 50:
+        score += 20
+    
+    # Recency score (recently modified = active)
+    if lead.modified_at:
+        days_since_modified = (datetime.now(ist) - lead.modified_at).days
+        if days_since_modified < 1:
+            score += 15
+        elif days_since_modified < 3:
+            score += 10
+    
+    # Determine priority
+    if score >= 60:
+        priority = 'High'
+    elif score >= 30:
+        priority = 'Medium'
+    else:
+        priority = 'Low'
+    
+    return {
+        'total_score': score,
+        'priority': priority
+    }
+
+@application.route('/calling-queue', methods=['GET'])
+@login_required
+def calling_queue_page():
+    """Calling queue page"""
+    return render_template('calling_queue.html')
+
+# Advanced Analytics Routes
+@application.route('/analytics', methods=['GET'])
+@login_required
+def analytics_page():
+    """Advanced analytics dashboard"""
+    try:
+        # Date range from request or default to last 30 days
+        end_date = request.args.get('end_date', datetime.now(ist).strftime('%Y-%m-%d'))
+        start_date = request.args.get('start_date', 
+                                      (datetime.now(ist) - timedelta(days=30)).strftime('%Y-%m-%d'))
+        
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+        
+        start_utc = ist.localize(datetime.combine(start_dt, datetime.min.time())).astimezone(pytz.UTC)
+        end_utc = ist.localize(datetime.combine(end_dt + timedelta(days=1), datetime.min.time())).astimezone(pytz.UTC)
+        
+        # Get user filter
+        user_filter = None
+        if current_user.is_admin and request.args.get('user_id'):
+            user_filter = int(request.args.get('user_id'))
+        elif not current_user.is_admin:
+            user_filter = current_user.id
+        
+        # Build base query
+        base_query = Lead.query
+        if user_filter:
+            base_query = base_query.filter(Lead.creator_id == user_filter)
+        
+        # 1. Conversion Funnel
+        funnel_data = {
+            'total_leads': base_query.filter(
+                Lead.created_at >= start_utc,
+                Lead.created_at < end_utc
+            ).count(),
+            'contacted': base_query.filter(
+                Lead.created_at >= start_utc,
+                Lead.created_at < end_utc,
+                Lead.status.in_(['Confirmed', 'Needs Followup', 'Completed'])
+            ).count(),
+            'interested': base_query.filter(
+                Lead.created_at >= start_utc,
+                Lead.created_at < end_utc,
+                Lead.status == 'Confirmed'
+            ).count(),
+            'converted': base_query.filter(
+                Lead.created_at >= start_utc,
+                Lead.created_at < end_utc,
+                Lead.status == 'Completed'
+            ).count()
+        }
+        
+        # 2. Status Distribution
+        status_distribution = db.session.query(
+            Lead.status,
+            db.func.count(Lead.id)
+        ).filter(
+            Lead.created_at >= start_utc,
+            Lead.created_at < end_utc
+        )
+        if user_filter:
+            status_distribution = status_distribution.filter(Lead.creator_id == user_filter)
+        status_data = dict(status_distribution.group_by(Lead.status).all())
+        
+        # 3. Daily Trends
+        daily_trends = db.session.query(
+            db.func.date(Lead.created_at).label('date'),
+            db.func.count(Lead.id).label('count')
+        ).filter(
+            Lead.created_at >= start_utc,
+            Lead.created_at < end_utc
+        )
+        if user_filter:
+            daily_trends = daily_trends.filter(Lead.creator_id == user_filter)
+        daily_data = daily_trends.group_by(db.func.date(Lead.created_at)).all()
+        
+        # 4. User Performance (if admin)
+        user_performance = []
+        if current_user.is_admin:
+            users = User.query.all()
+            for user in users:
+                user_leads = base_query.filter(
+                    Lead.creator_id == user.id,
+                    Lead.created_at >= start_utc,
+                    Lead.created_at < end_utc
+                ).count()
+                
+                user_completed = base_query.filter(
+                    Lead.creator_id == user.id,
+                    Lead.created_at >= start_utc,
+                    Lead.created_at < end_utc,
+                    Lead.status == 'Completed'
+                ).count()
+                
+                conversion_rate = (user_completed / user_leads * 100) if user_leads > 0 else 0
+                
+                user_performance.append({
+                    'name': user.name,
+                    'total_leads': user_leads,
+                    'completed': user_completed,
+                    'conversion_rate': round(conversion_rate, 2)
+                })
+        
+        # 5. Call Analytics (if call logs exist)
+        total_calls = CallLog.query.filter(
+            CallLog.call_started_at >= start_utc,
+            CallLog.call_started_at < end_utc
+        )
+        if user_filter:
+            total_calls = total_calls.filter(CallLog.user_id == user_filter)
+        
+        call_stats = {
+            'total_calls': total_calls.count(),
+            'answered': total_calls.filter(CallLog.call_status == 'answered').count(),
+            'not_answered': total_calls.filter(CallLog.call_status == 'not_answered').count(),
+            'avg_duration': db.session.query(db.func.avg(CallLog.duration)).filter(
+                CallLog.call_started_at >= start_utc,
+                CallLog.call_started_at < end_utc,
+                CallLog.call_status == 'answered'
+            ).scalar() or 0
+        }
+        
+        users = User.query.all() if current_user.is_admin else [current_user]
+        
+        return render_template('analytics.html',
+                             funnel_data=funnel_data,
+                             status_data=status_data,
+                             daily_data=daily_data,
+                             user_performance=user_performance,
+                             call_stats=call_stats,
+                             start_date=start_date,
+                             end_date=end_date,
+                             users=users)
+    
+    except Exception as e:
+        print(f"Analytics error: {e}")
+        flash('Error loading analytics', 'error')
+        return redirect(url_for('dashboard'))
 
 # Error handlers
 @application.errorhandler(404)
