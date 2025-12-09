@@ -6,8 +6,8 @@ os.environ['DATABASE_URL'] = 'postgresql://crmadmin:GaadiMech2024!@crm-portal-db
 os.environ['FLASK_ENV'] = 'development'
 os.environ['PORT'] = '8080'
 
-# Import the app
-from app import app
+# Import the application
+from application import application as app
 
 if __name__ == '__main__':
     print("🚀 Starting GaadiMech CRM locally...")

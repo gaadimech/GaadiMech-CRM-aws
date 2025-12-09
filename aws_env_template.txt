@@ -1,8 +1,0 @@
-SECRET_KEY=your-super-secret-key-change-this-in-production
-DATABASE_URL=postgresql://postgres:password@your-rds-endpoint.amazonaws.com:5432/crmportal
-RDS_HOST=your-rds-endpoint.amazonaws.com
-RDS_DB=crmportal
-RDS_USER=postgres
-RDS_PASSWORD=your-secure-password
-RDS_PORT=5432
-FLASK_ENV=production 

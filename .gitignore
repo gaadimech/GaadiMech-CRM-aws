@@ -22,12 +22,10 @@ __pycache__/
 .env
 .env.local
 .env.production
+.env.local.backup
 
 # Flask instance folder
 instance/
-
-# Documentation folder
-docs/
 
 # OS files
 .DS_Store
@@ -51,8 +49,76 @@ Thumbs.db
 
 # Log files
 *.log
+app.log
 
 # Database files
 *.db
 *.sqlite
 *.sqlite3
+local_crm.db
+
+# Temporary and test files
+*.txt
+!requirements.txt
+!runtime.txt
+!Procfile
+!README.md
+*.csv
+*.zip
+
+# Test and debug scripts (already removed, but ignore if they come back)
+*_test.py
+*test*.py
+check_*.py
+!check_overdue_leads.py
+debug_*.py
+analyze_*.py
+create_user_*.py
+update_*.py
+*_update*.py
+*password*.py
+*redistribute*.py
+*transfer*.py
+*rollover*.py
+*missed_leads*.py
+*query_*.py
+*execute_*.py
+*backup_*.py
+*restore_*.py
+*verify_*.py
+*generate_*.py
+*insert_*.py
+simple_*.py
+minimal_*.py
+final_*.py
+
+# SQL files (except migrations)
+*.sql
+!migrations/**/*.sql
+
+# Backup folders
+Database Backup*/
+Data */
+
+# Old deployment folders (keep only deployment/)
+deployment_25th_august/
+deployment_fixed_password/
+
+# AWS CLI
+awscliv2.zip
+aws/
+
+# Documentation (keep only main README)
+docs/
+*.md
+!README.md
+!frontend/README.md
+
+# Node modules (handled by frontend/.gitignore)
+node_modules/
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+frontend/build/
+cleanup_repo.sh
