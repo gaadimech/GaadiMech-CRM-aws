@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Nav from "../../../components/Nav";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
@@ -164,8 +163,7 @@ export default function AdminLeadsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <Nav />
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-zinc-900 mb-2">Admin Leads</h1>
           <p className="text-sm text-zinc-600">Manage unassigned leads and team assignments</p>
@@ -452,7 +450,7 @@ export default function AdminLeadsPage() {
             )}
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

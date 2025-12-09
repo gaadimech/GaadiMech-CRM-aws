@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Nav from "../../components/Nav";
 import type { LeadStatus } from "../../lib/types";
 
 const API_BASE =
@@ -79,8 +78,7 @@ export default function AddLeadPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <Nav />
-      <main className="mx-auto max-w-2xl px-4 py-6">
+      <div className="mx-auto max-w-2xl px-4 py-6">
         <div className="bg-white rounded-xl border border-zinc-200 p-6">
           <h1 className="text-2xl font-bold text-zinc-900 mb-6">Add New Lead</h1>
 
@@ -231,7 +229,7 @@ export default function AddLeadPage() {
             </div>
           </form>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

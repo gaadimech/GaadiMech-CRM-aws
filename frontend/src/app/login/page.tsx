@@ -33,15 +33,43 @@ export default function LoginPage() {
         body: formData.toString(),
       });
 
-      if (res.ok) {
+      // Try to parse JSON response
+      let data;
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        // If not JSON, read as text
+        const text = await res.text();
+        console.error("Non-JSON response:", text);
+      }
+
+      if (res.ok && data?.success) {
+        // Login successful
         router.push("/dashboard");
         router.refresh();
+      } else if (res.status === 401 || (data && !data.success)) {
+        // Invalid credentials
+        setError(data?.message || "Invalid username or password");
+      } else if (res.status === 302) {
+        // Redirect response (backend login page)
+        // Check if we're actually logged in
+        const checkRes = await fetch(`${API_BASE}/api/user/current`, {
+          credentials: "include",
+        });
+        if (checkRes.ok) {
+          router.push("/dashboard");
+          router.refresh();
+        } else {
+          setError("Login failed. Please try again.");
+        }
       } else {
-        setError("Invalid username or password");
+        // Other error
+        setError(data?.message || "Login failed. Please try again.");
       }
     } catch (err) {
-      setError("Login failed. Please try again.");
-      console.error(err);
+      console.error("Login error:", err);
+      setError("Login failed. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }

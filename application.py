@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_cors import CORS
 from datetime import datetime, timedelta, time
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
@@ -23,17 +24,19 @@ except ImportError:
     def parse_customer_text(text):
         return {"error": "Text parser not available"}
 
-# Try to import Twilio with fallback
-try:
-    from twilio.rest import Client
-    from twilio.twiml.voice_response import VoiceResponse
-    TWILIO_AVAILABLE = True
-except ImportError:
-    TWILIO_AVAILABLE = False
-    print("Twilio not available - Click-to-Call will be disabled")
-
 application = Flask(__name__)
 application.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'GaadiMech2024!')
+
+# Configure CORS for frontend API requests
+# Allow all origins in development, restrict in production
+CORS(application, 
+     origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001"],
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With", "Origin"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+     expose_headers=["Content-Type", "Authorization"],
+     max_age=3600,
+     send_wildcard=False)
 
 # Database configuration with better error handling
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -130,7 +133,7 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)  # Increased length for hashed passwords
     name = db.Column(db.String(100), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
-    mobile = db.Column(db.String(15), nullable=True)  # Added mobile field
+    # Note: User mobile numbers are stored in USER_MOBILE_MAPPING, not in database
     leads = db.relationship('Lead', backref='creator', lazy=True)
 
     def set_password(self, password):
@@ -287,15 +290,14 @@ class LeadScore(db.Model):
 class CallLog(db.Model):
     """
     Tracks all call activities for analytics and audit trail.
-    Enhanced to support Twilio Click-to-Call integration.
     """
     id = db.Column(db.Integer, primary_key=True)
     lead_id = db.Column(db.Integer, db.ForeignKey('lead.id'), nullable=True)  # Nullable for non-lead calls
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     
-    # Twilio-specific fields
-    call_sid = db.Column(db.String(100), unique=True, nullable=True)  # Twilio Call SID
-    from_number = db.Column(db.String(20))  # Caller ID (Twilio number)
+    # Call tracking fields
+    call_sid = db.Column(db.String(100), unique=True, nullable=True)  # Call SID (for external call services)
+    from_number = db.Column(db.String(20))  # Caller ID
     to_number = db.Column(db.String(20))  # User's number
     customer_number = db.Column(db.String(20))  # Customer's number
     
@@ -326,14 +328,47 @@ class CallLog(db.Model):
         db.Index('idx_call_log_sid', 'call_sid'),
     )
 
+class WhatsAppTemplate(db.Model):
+    """
+    Pre-defined WhatsApp message templates for quick customer communication.
+    Users can select a template when clicking WhatsApp button, and it will be prefilled in the chat.
+    """
+    __tablename__ = 'whatsapp_template'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)  # Template name/identifier
+    message = db.Column(db.Text, nullable=False)  # The actual message content
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(ist))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(ist), onupdate=lambda: datetime.now(ist))
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    creator = db.relationship('User', backref='whatsapp_templates')
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
-@application.route('/login', methods=['GET', 'POST'])
+@application.route('/login', methods=['GET', 'POST', 'OPTIONS'])
 @limiter.limit("20 per minute")
 def login():
+    # Get origin to determine if this is a frontend API request
+    origin = request.headers.get('Origin', '')
+    is_frontend_request = origin.startswith('http://localhost:3000') or origin.startswith('http://127.0.0.1:3000') or origin.startswith('http://localhost:3001')
+    
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        response = make_response()
+        if is_frontend_request:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+            response.headers.add('Access-Control-Allow-Credentials', 'true')
+            response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Accept, X-Requested-With, Origin')
+        return response
+    
     if current_user.is_authenticated:
+        # For frontend requests, always return JSON
+        if is_frontend_request:
+            return jsonify({'success': True, 'message': 'Already logged in', 'user': {'id': current_user.id, 'username': current_user.username, 'name': current_user.name, 'is_admin': current_user.is_admin}})
         return redirect(url_for('index'))
 
     if request.method == 'POST':
@@ -345,17 +380,72 @@ def login():
             
             if user and user.check_password(password):
                 login_user(user, remember=True)
+                
+                # For frontend requests, always return JSON
+                if is_frontend_request:
+                    return jsonify({
+                        'success': True, 
+                        'message': 'Login successful',
+                        'user': {
+                            'id': user.id,
+                            'username': user.username,
+                            'name': user.name,
+                            'is_admin': user.is_admin
+                        }
+                    })
+                
+                # For backend requests, redirect
                 next_page = request.args.get('next')
                 if not next_page or not next_page.startswith('/'):
                     next_page = url_for('index')
                 return redirect(next_page)
             else:
+                # For frontend requests, return JSON error
+                if is_frontend_request:
+                    return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
                 flash('Invalid username or password', 'error')
         except Exception as e:
-            flash('An error occurred during login. Please try again.', 'error')
+            # Log the full error for debugging
+            import traceback
+            error_trace = traceback.format_exc()
             print(f"Login error: {str(e)}")
+            print(f"Traceback: {error_trace}")
+            
+            # For frontend requests, return JSON error
+            if is_frontend_request:
+                error_msg = f'An error occurred during login: {str(e)}' if application.debug else 'An error occurred during login'
+                return jsonify({'success': False, 'message': error_msg}), 500
+            flash('An error occurred during login. Please try again.', 'error')
+    
+    # For frontend GET requests, return JSON (they shouldn't be accessing this directly)
+    if is_frontend_request and request.method == 'GET':
+        return jsonify({'success': False, 'message': 'Please use POST to login'}), 405
     
     return render_template('login.html')
+
+@application.after_request
+def after_request(response):
+    """Add CORS headers to all responses"""
+    origin = request.headers.get('Origin', '')
+    # Allow requests from frontend development servers
+    allowed_origins = [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://localhost:3001',
+        'http://127.0.0.1:3001'
+    ]
+    
+    if origin in allowed_origins or any(origin.startswith(orig) for orig in allowed_origins):
+        # Don't override if Flask-CORS already set it
+        if 'Access-Control-Allow-Origin' not in response.headers:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+        if 'Access-Control-Allow-Credentials' not in response.headers:
+            response.headers.add('Access-Control-Allow-Credentials', 'true')
+        if 'Access-Control-Allow-Methods' not in response.headers:
+            response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH')
+        if 'Access-Control-Allow-Headers' not in response.headers:
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Origin')
+    return response
 
 @application.teardown_request
 def teardown_request(exception=None):
@@ -379,174 +469,6 @@ def open_whatsapp(mobile):
     
     return jsonify({'url': whatsapp_url})
 
-# ==========================================
-# CLICK-TO-CALL WITH TWILIO INTEGRATION
-# ==========================================
-
-@application.route('/api/call/initiate', methods=['POST'])
-@login_required
-@limiter.limit("60 per minute")
-def initiate_call():
-    """
-    Initiate a call using Twilio Click-to-Call
-    Request body: {
-        "lead_id": 123,
-        "customer_mobile": "9876543210",
-        "user_mobile": "9123456789"  # Optional: telecaller's mobile
-    }
-    """
-    if not TWILIO_AVAILABLE:
-        return jsonify({
-            'success': False,
-            'error': 'Twilio integration is not configured'
-        }), 503
-    
-    try:
-        data = request.get_json()
-        lead_id = data.get('lead_id')
-        customer_mobile = data.get('customer_mobile')
-        user_mobile = data.get('user_mobile', current_user.username)  # Fallback to username
-        
-        # Validate inputs
-        if not customer_mobile:
-            return jsonify({
-                'success': False,
-                'error': 'Customer mobile number is required'
-            }), 400
-        
-        # Clean and format mobile numbers
-        customer_mobile = ''.join(filter(str.isdigit, customer_mobile))
-        user_mobile = ''.join(filter(str.isdigit, str(user_mobile)))
-        
-        # Add country code if not present (India: +91)
-        if len(customer_mobile) == 10:
-            customer_mobile = '+91' + customer_mobile
-        elif not customer_mobile.startswith('+'):
-            customer_mobile = '+' + customer_mobile
-            
-        if len(user_mobile) == 10:
-            user_mobile = '+91' + user_mobile
-        elif not user_mobile.startswith('+'):
-            user_mobile = '+' + user_mobile
-        
-        # Get Twilio credentials from environment
-        twilio_account_sid = os.getenv('TWILIO_ACCOUNT_SID')
-        twilio_auth_token = os.getenv('TWILIO_AUTH_TOKEN')
-        twilio_phone_number = os.getenv('TWILIO_PHONE_NUMBER')
-        
-        if not all([twilio_account_sid, twilio_auth_token, twilio_phone_number]):
-            return jsonify({
-                'success': False,
-                'error': 'Twilio credentials not configured. Please contact administrator.'
-            }), 500
-        
-        # Initialize Twilio client
-        client = Client(twilio_account_sid, twilio_auth_token)
-        
-        # Create the call
-        # Twilio will first call the user (telecaller), then connect to customer
-        call = client.calls.create(
-            url=request.url_root + f'api/call/connect?customer={customer_mobile}&lead_id={lead_id}',
-            to=user_mobile,
-            from_=twilio_phone_number,
-            status_callback=request.url_root + 'api/call/status',
-            status_callback_event=['initiated', 'ringing', 'answered', 'completed']
-        )
-        
-        # Log the call in database
-        call_log = CallLog(
-            lead_id=lead_id,
-            user_id=current_user.id,
-            call_sid=call.sid,
-            from_number=twilio_phone_number,
-            to_number=user_mobile,
-            customer_number=customer_mobile,
-            status='initiated',
-            direction='outbound',
-            created_at=datetime.now(pytz.UTC)
-        )
-        db.session.add(call_log)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'call_sid': call.sid,
-            'status': 'initiated',
-            'message': f'Calling {user_mobile}... You will be connected to {customer_mobile}'
-        })
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error initiating call: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': f'Failed to initiate call: {str(e)}'
-        }), 500
-
-@application.route('/api/call/connect', methods=['GET', 'POST'])
-def call_connect():
-    """
-    TwiML endpoint: Called when user (telecaller) answers
-    This creates the bridge to connect user to customer
-    """
-    customer_mobile = request.args.get('customer')
-    lead_id = request.args.get('lead_id')
-    
-    response = VoiceResponse()
-    
-    # Play a message to the telecaller
-    response.say('Connecting you to the customer. Please wait.', voice='alice', language='en-IN')
-    
-    # Dial the customer
-    dial = response.dial(
-        caller_id=os.getenv('TWILIO_PHONE_NUMBER'),
-        timeout=30,
-        action=request.url_root + f'api/call/completed?lead_id={lead_id}'
-    )
-    dial.number(customer_mobile)
-    
-    return str(response), 200, {'Content-Type': 'text/xml'}
-
-@application.route('/api/call/status', methods=['POST'])
-def call_status():
-    """
-    Webhook for call status updates from Twilio
-    Updates call log in database
-    """
-    try:
-        call_sid = request.form.get('CallSid')
-        call_status = request.form.get('CallStatus')
-        duration = request.form.get('CallDuration', 0)
-        
-        # Update call log
-        call_log = CallLog.query.filter_by(call_sid=call_sid).first()
-        if call_log:
-            call_log.status = call_status
-            call_log.duration = int(duration)
-            call_log.updated_at = datetime.now(pytz.UTC)
-            db.session.commit()
-        
-        return jsonify({'success': True}), 200
-    except Exception as e:
-        print(f"Error updating call status: {str(e)}")
-        return jsonify({'success': False}), 500
-
-@application.route('/api/call/completed', methods=['POST'])
-def call_completed():
-    """
-    Called when customer call completes or fails
-    """
-    lead_id = request.args.get('lead_id')
-    dial_call_status = request.form.get('DialCallStatus')
-    
-    response = VoiceResponse()
-    
-    if dial_call_status == 'completed':
-        response.say('Call completed. Thank you.', voice='alice', language='en-IN')
-    else:
-        response.say('Customer did not answer. Please try again later.', voice='alice', language='en-IN')
-    
-    return str(response), 200, {'Content-Type': 'text/xml'}
 
 @application.route('/api/call/history/<int:lead_id>', methods=['GET'])
 @login_required
@@ -627,6 +549,10 @@ def call_stats():
 @login_required
 def logout():
     logout_user()
+    # Support both HTML redirect and JSON response
+    accept_header = request.headers.get('Accept', '')
+    if 'application/json' in accept_header:
+        return jsonify({'success': True, 'message': 'Logged out successfully'})
     return redirect(url_for('login'))
 
 @application.route('/')
@@ -1410,6 +1336,711 @@ def update_followup():
         print(f"Error updating followup: {e}")
         return jsonify({'success': False, 'message': 'Error updating followup'})
 
+# Priority 1: Core API endpoints for new TypeScript frontend
+
+@application.route('/api/followups/today', methods=['GET'])
+@login_required
+def api_followups_today():
+    """Get today's followups queue with optional filters"""
+    try:
+        # Ensure database connection
+        db.session.execute(db.text('SELECT 1'))
+        # Get query parameters
+        date_str = request.args.get('date', datetime.now(ist).strftime('%Y-%m-%d'))
+        overdue_only = request.args.get('overdue_only', '0') == '1'
+        user_id_param = request.args.get('user_id', '')
+        
+        # Parse the date
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            target_date = datetime.now(ist).date()
+        
+        # Create IST datetime range for the selected date
+        # Start: selected date at 00:00:00 IST
+        # End: selected date at 23:59:59.999 IST (next day 00:00:00 IST)
+        target_start_ist = ist.localize(datetime.combine(target_date, datetime.min.time()))
+        target_end_ist = target_start_ist + timedelta(days=1)
+        
+        # Convert to UTC for database query
+        # This ensures we get all followups that fall on the selected date in IST
+        target_start_utc = target_start_ist.astimezone(pytz.UTC)
+        target_end_utc = target_end_ist.astimezone(pytz.UTC)
+        
+        # Debug logging
+        print(f"Date filter - Selected: {date_str} ({target_date})")
+        print(f"  IST range: {target_start_ist} to {target_end_ist}")
+        print(f"  UTC range: {target_start_utc} to {target_end_utc}")
+        
+        # Build query - filter by UTC range
+        # This will correctly include all followups that fall on the selected date in IST
+        query = Lead.query.filter(
+            Lead.followup_date >= target_start_utc,
+            Lead.followup_date < target_end_utc
+        )
+        
+        # Apply user filter
+        if user_id_param and current_user.is_admin:
+            try:
+                query = query.filter(Lead.creator_id == int(user_id_param))
+            except ValueError:
+                pass
+        elif not current_user.is_admin:
+            query = query.filter(Lead.creator_id == current_user.id)
+        
+        # Get leads
+        leads = query.order_by(Lead.followup_date.asc()).all()
+        
+        # Convert to JSON format
+        items = []
+        now_utc = datetime.now(pytz.UTC)
+        
+        for lead in leads:
+            # Check if overdue - ensure both datetimes are timezone-aware
+            if lead.followup_date:
+                # Ensure followup_date is timezone-aware (it should be UTC from DB)
+                if lead.followup_date.tzinfo is None:
+                    # If naive, assume it's UTC
+                    followup_date_aware = pytz.UTC.localize(lead.followup_date)
+                else:
+                    followup_date_aware = lead.followup_date
+                is_overdue = followup_date_aware < now_utc
+            else:
+                is_overdue = False
+            
+            # Skip if overdue_only filter is set and lead is not overdue
+            if overdue_only and not is_overdue:
+                continue
+            
+            # Get creator name
+            creator_name = lead.creator.name if lead.creator else 'Unknown'
+            
+            # Ensure followup_date is timezone-aware before converting to ISO
+            followup_date_iso = None
+            if lead.followup_date:
+                # If naive, assume it's UTC and localize it
+                if lead.followup_date.tzinfo is None:
+                    followup_date_aware = pytz.UTC.localize(lead.followup_date)
+                else:
+                    followup_date_aware = lead.followup_date
+                followup_date_iso = followup_date_aware.isoformat()
+            
+            items.append({
+                'id': lead.id,
+                'customer_name': lead.customer_name,
+                'mobile': lead.mobile,
+                'car_registration': lead.car_registration or '',
+                'followup_date': followup_date_iso,
+                'status': lead.status,
+                'remarks': lead.remarks or '',
+                'creator_id': lead.creator_id,
+                'creator_name': creator_name,
+                'created_at': lead.created_at.isoformat() if lead.created_at else None,
+                'modified_at': lead.modified_at.isoformat() if lead.modified_at else None,
+                'overdue': is_overdue
+            })
+        
+        return jsonify({
+            'date': date_str,
+            'items': items
+        })
+        
+    except Exception as e:
+        print(f"Error in api_followups_today: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'message': 'Failed to fetch followups'}), 500
+
+@application.route('/api/dashboard/metrics', methods=['GET'])
+@login_required
+def api_dashboard_metrics():
+    """Get dashboard metrics for a specific date"""
+    try:
+        # Ensure database connection
+        db.session.execute(db.text('SELECT 1'))
+        date_str = request.args.get('date', datetime.now(ist).strftime('%Y-%m-%d'))
+        
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            target_date = datetime.now(ist).date()
+        
+        target_start = ist.localize(datetime.combine(target_date, datetime.min.time()))
+        target_end = target_start + timedelta(days=1)
+        target_start_utc = target_start.astimezone(pytz.UTC)
+        target_end_utc = target_end.astimezone(pytz.UTC)
+        
+        # Get user_id filter (only for admins)
+        user_id_param = request.args.get('user_id', '')
+        filter_user_id = None
+        if user_id_param and current_user.is_admin:
+            try:
+                filter_user_id = int(user_id_param)
+            except ValueError:
+                pass
+        
+        # Base conditions for user filtering
+        base_conditions = []
+        if filter_user_id:
+            # Admin filtering by specific user
+            base_conditions.append(Lead.creator_id == filter_user_id)
+        elif not current_user.is_admin:
+            # Non-admin sees only their own data
+            base_conditions.append(Lead.creator_id == current_user.id)
+        
+        # Today's followups count
+        todays_followups_query = db.session.query(db.func.count(Lead.id)).filter(
+            Lead.followup_date >= target_start_utc,
+            Lead.followup_date < target_end_utc
+        )
+        if base_conditions:
+            todays_followups_query = todays_followups_query.filter(*base_conditions)
+        todays_followups = todays_followups_query.scalar() or 0
+        
+        # Pending followups (status not Completed/Confirmed)
+        pending_query = db.session.query(db.func.count(Lead.id)).filter(
+            Lead.followup_date >= target_start_utc,
+            Lead.followup_date < target_end_utc,
+            ~Lead.status.in_(['Completed', 'Confirmed'])
+        )
+        if base_conditions:
+            pending_query = pending_query.filter(*base_conditions)
+        pending_followups = pending_query.scalar() or 0
+        
+        # Initial assignment (from daily snapshot)
+        if filter_user_id:
+            # Filter by specific user
+            users = User.query.filter_by(id=filter_user_id).all()
+        elif current_user.is_admin:
+            users = User.query.all()
+        else:
+            users = [current_user]
+        
+        total_initial_count = 0
+        total_worked_count = 0
+        
+        for user in users:
+            initial_count = get_initial_followup_count(user.id, target_date)
+            worked_count = get_worked_leads_for_date(user.id, target_date)
+            total_initial_count += initial_count
+            total_worked_count += worked_count
+        
+        # New leads today
+        new_leads_query = db.session.query(db.func.count(Lead.id)).filter(
+            Lead.created_at >= target_start_utc,
+            Lead.created_at < target_end_utc
+        )
+        if base_conditions:
+            new_leads_query = new_leads_query.filter(*base_conditions)
+        new_leads_today = new_leads_query.scalar() or 0
+        
+        # Completion rate
+        completion_rate = calculate_completion_rate(total_initial_count, total_worked_count)
+        
+        return jsonify({
+            'todays_followups': todays_followups,
+            'initial_assignment': total_initial_count,
+            'completion_rate': completion_rate,
+            'new_leads_today': new_leads_today,
+            'completed_followups': total_worked_count,
+            'pending_followups': pending_followups
+        })
+        
+    except Exception as e:
+        print(f"Error in api_dashboard_metrics: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'message': 'Failed to fetch dashboard metrics'}), 500
+
+@application.route('/api/dashboard/team-performance', methods=['GET'])
+@login_required
+def api_dashboard_team_performance():
+    """Get team performance data for a specific date"""
+    try:
+        date_str = request.args.get('date', datetime.now(ist).strftime('%Y-%m-%d'))
+        
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            target_date = datetime.now(ist).date()
+        
+        target_start = ist.localize(datetime.combine(target_date, datetime.min.time()))
+        target_end = target_start + timedelta(days=1)
+        target_start_utc = target_start.astimezone(pytz.UTC)
+        target_end_utc = target_end.astimezone(pytz.UTC)
+        
+        # Get user_id filter (only for admins)
+        user_id_param = request.args.get('user_id', '')
+        filter_user_id = None
+        if user_id_param and current_user.is_admin:
+            try:
+                filter_user_id = int(user_id_param)
+            except ValueError:
+                pass
+        
+        # Get users based on permissions and filter
+        if filter_user_id:
+            # Admin filtering by specific user
+            users = User.query.filter_by(id=filter_user_id).all()
+        elif current_user.is_admin:
+            users = User.query.all()
+        else:
+            users = [current_user]
+        
+        team_performance = []
+        
+        for user in users:
+            # Get initial followup count
+            initial_count = get_initial_followup_count(user.id, target_date)
+            
+            # Get worked leads count
+            worked_count = get_worked_leads_for_date(user.id, target_date)
+            
+            # Calculate pending
+            pending_count = max(0, initial_count - worked_count)
+            
+            # Calculate completion rate
+            completion_rate = calculate_completion_rate(initial_count, worked_count)
+            
+            # Get new leads count
+            new_leads_count = db.session.query(db.func.count(Lead.id)).filter(
+                Lead.creator_id == user.id,
+                Lead.created_at >= target_start_utc,
+                Lead.created_at < target_end_utc
+            ).scalar() or 0
+            
+            team_performance.append({
+                'id': user.id,
+                'name': user.name,
+                'assigned': initial_count,
+                'worked': worked_count,
+                'pending': pending_count,
+                'completion_rate': completion_rate,
+                'new_leads': new_leads_count
+            })
+        
+        # Sort by completion rate
+        team_performance.sort(key=lambda x: x['completion_rate'], reverse=True)
+        
+        return jsonify(team_performance)
+        
+    except Exception as e:
+        print(f"Error in api_dashboard_team_performance: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@application.route('/api/followups', methods=['GET'])
+@login_required
+def api_followups():
+    """Search and filter followups with JSON response"""
+    try:
+        # Get query parameters
+        search = request.args.get('search', '')
+        date = request.args.get('date', '')
+        created_date = request.args.get('created_date', '')
+        modified_date = request.args.get('modified_date', '')
+        car_registration = request.args.get('car_registration', '')
+        mobile = request.args.get('mobile', '')
+        status = request.args.get('status', '')
+        user_id = request.args.get('user_id', '')
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        
+        # Start with base query
+        query = Lead.query
+        
+        # Apply user filter based on permissions
+        if current_user.is_admin and user_id:
+            try:
+                query = query.filter(Lead.creator_id == int(user_id))
+            except ValueError:
+                pass
+        elif not current_user.is_admin:
+            query = query.filter(Lead.creator_id == current_user.id)
+        
+        # Apply date filters
+        if date:
+            try:
+                target_date = datetime.strptime(date, '%Y-%m-%d').date()
+                # Create IST datetime range for the selected date
+                target_start = ist.localize(datetime.combine(target_date, datetime.min.time()))
+                target_end = target_start + timedelta(days=1)
+                # Convert to UTC for database query
+                target_start_utc = target_start.astimezone(pytz.UTC)
+                target_end_utc = target_end.astimezone(pytz.UTC)
+                
+                # Debug logging
+                print(f"API followups date filter - Selected: {date}, IST range: {target_start} to {target_end}, UTC range: {target_start_utc} to {target_end_utc}")
+                
+                query = query.filter(
+                    Lead.followup_date >= target_start_utc,
+                    Lead.followup_date < target_end_utc
+                )
+            except ValueError:
+                pass
+        
+        if created_date:
+            try:
+                target_date = datetime.strptime(created_date, '%Y-%m-%d').date()
+                target_start = ist.localize(datetime.combine(target_date, datetime.min.time()))
+                target_end = target_start + timedelta(days=1)
+                target_start_utc = target_start.astimezone(pytz.UTC)
+                target_end_utc = target_end.astimezone(pytz.UTC)
+                query = query.filter(
+                    Lead.created_at >= target_start_utc,
+                    Lead.created_at < target_end_utc
+                )
+            except ValueError:
+                pass
+        
+        if modified_date:
+            try:
+                target_date = datetime.strptime(modified_date, '%Y-%m-%d').date()
+                target_start = ist.localize(datetime.combine(target_date, datetime.min.time()))
+                target_end = target_start + timedelta(days=1)
+                target_start_utc = target_start.astimezone(pytz.UTC)
+                target_end_utc = target_end.astimezone(pytz.UTC)
+                query = query.filter(
+                    Lead.modified_at >= target_start_utc,
+                    Lead.modified_at < target_end_utc
+                )
+            except ValueError:
+                pass
+        
+        # Apply other filters
+        if car_registration:
+            query = query.filter(Lead.car_registration.ilike(f'%{car_registration}%'))
+        
+        if mobile:
+            query = query.filter(Lead.mobile.ilike(f'%{mobile}%'))
+        
+        if status:
+            query = query.filter(Lead.status == status)
+        
+        if search:
+            query = query.filter(
+                db.or_(
+                    Lead.customer_name.ilike(f'%{search}%'),
+                    Lead.mobile.ilike(f'%{search}%'),
+                    Lead.car_registration.ilike(f'%{search}%'),
+                    Lead.remarks.ilike(f'%{search}%')
+                )
+            )
+        
+        # Paginate
+        pagination = query.order_by(Lead.followup_date.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        # Convert to JSON
+        leads = []
+        for lead in pagination.items:
+            creator_name = lead.creator.name if lead.creator else 'Unknown'
+            
+            # Ensure followup_date is timezone-aware before converting to ISO
+            followup_date_iso = None
+            if lead.followup_date:
+                # If naive, assume it's UTC and localize it
+                if lead.followup_date.tzinfo is None:
+                    followup_date_aware = pytz.UTC.localize(lead.followup_date)
+                else:
+                    followup_date_aware = lead.followup_date
+                followup_date_iso = followup_date_aware.isoformat()
+            
+            leads.append({
+                'id': lead.id,
+                'customer_name': lead.customer_name,
+                'mobile': lead.mobile,
+                'car_registration': lead.car_registration or '',
+                'followup_date': followup_date_iso,
+                'status': lead.status,
+                'remarks': lead.remarks or '',
+                'creator_id': lead.creator_id,
+                'creator_name': creator_name,
+                'created_at': lead.created_at.isoformat() if lead.created_at else None,
+                'modified_at': lead.modified_at.isoformat() if lead.modified_at else None
+            })
+        
+        return jsonify({
+            'leads': leads,
+            'total_pages': pagination.pages,
+            'current_page': page,
+            'per_page': per_page,
+            'total': pagination.total
+        })
+        
+    except Exception as e:
+        print(f"Error in api_followups: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@application.route('/api/followups/<int:lead_id>', methods=['PATCH'])
+@login_required
+def api_update_followup(lead_id):
+    """Update a followup/lead"""
+    try:
+        lead = Lead.query.get_or_404(lead_id)
+        
+        # Check permissions
+        if not current_user.is_admin and lead.creator_id != current_user.id:
+            return jsonify({'error': 'Permission denied'}), 403
+        
+        data = request.get_json()
+        
+        # Update fields
+        if 'customer_name' in data:
+            lead.customer_name = data['customer_name']
+        if 'mobile' in data:
+            lead.mobile = data['mobile']
+        if 'car_registration' in data:
+            lead.car_registration = data['car_registration']
+        if 'status' in data:
+            lead.status = data['status']
+        if 'remarks' in data:
+            lead.remarks = data['remarks']
+        if 'followup_date' in data and data['followup_date']:
+            # Parse ISO date string (should be in UTC from frontend)
+            # Frontend sends UTC ISO, we need to interpret it as IST date and convert to UTC
+            try:
+                followup_dt = datetime.fromisoformat(data['followup_date'].replace('Z', '+00:00'))
+                # Get the date part (assuming it represents IST date)
+                followup_date_only = followup_dt.date()
+                # Create datetime at midnight IST, then convert to UTC
+                followup_start = ist.localize(datetime.combine(followup_date_only, datetime.min.time()))
+                lead.followup_date = followup_start.astimezone(pytz.UTC)
+            except (ValueError, AttributeError) as e:
+                print(f"Error parsing followup_date: {e}")
+                # Try alternative: assume YYYY-MM-DD format
+                try:
+                    followup_date_only = datetime.strptime(data['followup_date'], '%Y-%m-%d').date()
+                    followup_start = ist.localize(datetime.combine(followup_date_only, datetime.min.time()))
+                    lead.followup_date = followup_start.astimezone(pytz.UTC)
+                except ValueError:
+                    pass
+        
+        lead.modified_at = datetime.now(ist)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Lead updated successfully',
+            'lead': {
+                'id': lead.id,
+                'customer_name': lead.customer_name,
+                'mobile': lead.mobile,
+                'car_registration': lead.car_registration,
+                'followup_date': lead.followup_date.isoformat() if lead.followup_date else None,
+                'status': lead.status,
+                'remarks': lead.remarks,
+                'modified_at': lead.modified_at.isoformat() if lead.modified_at else None,
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating followup: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'message': 'Error updating lead'}), 500
+
+@application.route('/api/followups/<int:lead_id>', methods=['DELETE'])
+@login_required
+def api_delete_followup(lead_id):
+    """Delete a followup/lead"""
+    try:
+        lead = Lead.query.get_or_404(lead_id)
+        
+        # Check permissions - only admin can delete
+        if not current_user.is_admin:
+            return jsonify({'error': 'Permission denied. Only admins can delete leads.'}), 403
+        
+        # Delete the lead
+        db.session.delete(lead)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Lead deleted successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting followup: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'message': 'Error deleting lead'}), 500
+
+@application.route('/api/user/current', methods=['GET'])
+@login_required
+def api_user_current():
+    """Get current user info for admin check"""
+    try:
+        return jsonify({
+            'id': current_user.id,
+            'username': current_user.username,
+            'name': current_user.name,
+            'is_admin': current_user.is_admin
+        })
+    except Exception as e:
+        print(f"Error in api_user_current: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# WhatsApp Template API endpoints
+@application.route('/api/whatsapp-templates', methods=['GET', 'OPTIONS'])
+@login_required
+def api_whatsapp_templates():
+    """Get all WhatsApp templates"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+    
+    try:
+        templates = WhatsAppTemplate.query.order_by(WhatsAppTemplate.created_at.desc()).all()
+        response = jsonify({
+            'templates': [{
+                'id': t.id,
+                'name': t.name,
+                'message': t.message,
+                'created_at': t.created_at.isoformat() if t.created_at else None,
+                'updated_at': t.updated_at.isoformat() if t.updated_at else None,
+                'created_by': t.created_by
+            } for t in templates]
+        })
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+    except Exception as e:
+        print(f"Error fetching WhatsApp templates: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@application.route('/api/whatsapp-templates', methods=['POST', 'OPTIONS'])
+@login_required
+def api_create_whatsapp_template():
+    """Create a new WhatsApp template"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+    
+    try:
+        data = request.get_json()
+        if not data or not data.get('name') or not data.get('message'):
+            return jsonify({'error': 'Name and message are required'}), 400
+        
+        template = WhatsAppTemplate(
+            name=data['name'],
+            message=data['message'],
+            created_by=current_user.id
+        )
+        db.session.add(template)
+        db.session.commit()
+        
+        response = jsonify({
+            'success': True,
+            'template': {
+                'id': template.id,
+                'name': template.name,
+                'message': template.message,
+                'created_at': template.created_at.isoformat() if template.created_at else None,
+                'updated_at': template.updated_at.isoformat() if template.updated_at else None,
+                'created_by': template.created_by
+            }
+        })
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 201
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating WhatsApp template: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@application.route('/api/whatsapp-templates/<int:template_id>', methods=['PUT', 'OPTIONS'])
+@login_required
+def api_update_whatsapp_template(template_id):
+    """Update an existing WhatsApp template"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+    
+    try:
+        template = WhatsAppTemplate.query.get_or_404(template_id)
+        
+        # Check permissions - only creator or admin can edit
+        if template.created_by != current_user.id and not current_user.is_admin:
+            return jsonify({'error': 'Permission denied'}), 403
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        if 'name' in data:
+            template.name = data['name']
+        if 'message' in data:
+            template.message = data['message']
+        
+        template.updated_at = datetime.now(ist)
+        db.session.commit()
+        
+        response = jsonify({
+            'success': True,
+            'template': {
+                'id': template.id,
+                'name': template.name,
+                'message': template.message,
+                'created_at': template.created_at.isoformat() if template.created_at else None,
+                'updated_at': template.updated_at.isoformat() if template.updated_at else None,
+                'created_by': template.created_by
+            }
+        })
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating WhatsApp template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@application.route('/api/whatsapp-templates/<int:template_id>', methods=['DELETE', 'OPTIONS'])
+@login_required
+def api_delete_whatsapp_template(template_id):
+    """Delete a WhatsApp template"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+    
+    try:
+        template = WhatsAppTemplate.query.get_or_404(template_id)
+        
+        # Check permissions - only creator or admin can delete
+        if template.created_by != current_user.id and not current_user.is_admin:
+            return jsonify({'error': 'Permission denied'}), 403
+        
+        db.session.delete(template)
+        db.session.commit()
+        
+        response = jsonify({'success': True, 'message': 'Template deleted successfully'})
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting WhatsApp template: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @application.route('/followups')
 @login_required
 def followups():
@@ -1540,6 +2171,108 @@ def followups():
         print(f"Followups error: {str(e)}")
         flash('Error loading followups. Please try again.', 'error')
         return redirect(url_for('index'))
+
+# Admin API endpoints for new TypeScript frontend
+
+@application.route('/api/admin/unassigned-leads', methods=['GET'])
+@login_required
+def api_admin_unassigned_leads():
+    """Get unassigned leads for admin"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        search = request.args.get('search', '')
+        created_date = request.args.get('created_date', '')
+        
+        query = UnassignedLead.query
+        
+        # Apply search filter
+        if search:
+            query = query.filter(
+                db.or_(
+                    UnassignedLead.customer_name.ilike(f'%{search}%'),
+                    UnassignedLead.mobile.ilike(f'%{search}%'),
+                    UnassignedLead.car_manufacturer.ilike(f'%{search}%'),
+                    UnassignedLead.car_model.ilike(f'%{search}%')
+                )
+            )
+        
+        # Apply date filter
+        if created_date:
+            try:
+                filter_date = datetime.strptime(created_date, '%Y-%m-%d').date()
+                start_date = ist.localize(datetime.combine(filter_date, datetime.min.time()))
+                end_date = start_date + timedelta(days=1)
+                start_date_utc = start_date.astimezone(pytz.UTC)
+                end_date_utc = end_date.astimezone(pytz.UTC)
+                
+                query = query.filter(
+                    UnassignedLead.created_at >= start_date_utc,
+                    UnassignedLead.created_at < end_date_utc
+                )
+            except ValueError:
+                pass
+        
+        # Get recent leads
+        unassigned_leads = query.order_by(UnassignedLead.created_at.desc()).limit(100).all()
+        
+        # Convert to JSON
+        leads = []
+        for lead in unassigned_leads:
+            # Get current assignment if any
+            current_assignment = TeamAssignment.query.filter_by(
+                unassigned_lead_id=lead.id
+            ).order_by(TeamAssignment.assigned_at.desc()).first()
+            
+            assigned_to = None
+            if current_assignment:
+                assigned_user = User.query.get(current_assignment.assigned_to_user_id)
+                assigned_to = assigned_user.name if assigned_user else None
+            
+            leads.append({
+                'id': lead.id,
+                'mobile': lead.mobile,
+                'customer_name': lead.customer_name or '',
+                'car_manufacturer': lead.car_manufacturer or '',
+                'car_model': lead.car_model or '',
+                'pickup_type': lead.pickup_type or '',
+                'service_type': lead.service_type or '',
+                'scheduled_date': lead.scheduled_date.isoformat() if lead.scheduled_date else None,
+                'source': lead.source or '',
+                'remarks': lead.remarks or '',
+                'created_at': lead.created_at.isoformat() if lead.created_at else None,
+                'assigned_to': assigned_to
+            })
+        
+        return jsonify({'leads': leads})
+        
+    except Exception as e:
+        print(f"Error in api_admin_unassigned_leads: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@application.route('/api/admin/team-members', methods=['GET'])
+@login_required
+def api_admin_team_members():
+    """Get list of team members (non-admin users)"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        # Get all non-admin users
+        team_members = User.query.filter_by(is_admin=False).all()
+        
+        members = [{
+            'id': member.id,
+            'name': member.name,
+            'username': member.username
+        } for member in team_members]
+        
+        return jsonify({'members': members})
+        
+    except Exception as e:
+        print(f"Error in api_admin_team_members: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @application.route('/admin_leads', methods=['GET', 'POST'])
 @login_required
@@ -2240,11 +2973,19 @@ def calculate_lead_score(lead):
     """
     score = 0
     
-    # Check if overdue
+    # Check if overdue - ensure both datetimes are timezone-aware
     now_utc = datetime.now(pytz.UTC)
-    if lead.followup_date < now_utc:
-        days_overdue = (now_utc - lead.followup_date).days
-        score += min(50, 10 * days_overdue)  # Max 50 points
+    if lead.followup_date:
+        # Ensure followup_date is timezone-aware
+        if lead.followup_date.tzinfo is None:
+            # If naive, assume it's UTC
+            followup_date_aware = pytz.UTC.localize(lead.followup_date)
+        else:
+            followup_date_aware = lead.followup_date
+        
+        if followup_date_aware < now_utc:
+            days_overdue = (now_utc - followup_date_aware).days
+            score += min(50, 10 * days_overdue)  # Max 50 points
     
     # Status-based score
     status_scores = {

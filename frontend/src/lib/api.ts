@@ -164,3 +164,23 @@ export async function fetchTeamMembers() {
   }>("/api/admin/team-members");
 }
 
+export async function fetchCurrentUser() {
+  return apiFetch<{
+    id: number;
+    username: string;
+    name: string;
+    is_admin: boolean;
+  }>("/api/user/current");
+}
+
+export async function logout() {
+  const API_BASE =
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
+    "http://localhost:5000";
+  
+  await fetch(`${API_BASE}/logout`, {
+    method: "GET",
+    credentials: "include",
+  });
+}
+

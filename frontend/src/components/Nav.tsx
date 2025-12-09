@@ -12,6 +12,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/add-lead", label: "Add Lead" },
   { href: "/followups", label: "View Followups" },
+  { href: "/whatsapp-templates", label: "Whatsapp Templates" },
 ];
 
 export default function Nav() {

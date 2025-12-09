@@ -402,9 +402,6 @@
                         ` : ''}
                     </div>
                     <div class="col-md-4 text-end">
-                        <button class="call-button w-100 mb-2" onclick="twilioCall()" title="Twilio Click-to-Call">
-                            <i class="fas fa-phone-volume"></i> Click-to-Call
-                        </button>
                         <button class="call-button w-100 mb-2" onclick="makeCall()" style="background: #28a745;">
                             <i class="fas fa-phone"></i> Direct Call
                         </button>
@@ -468,54 +465,6 @@
                 window.location.href = `tel:${currentLead.mobile}`;
                 // Open quick log after a short delay
                 setTimeout(() => showQuickLog(), 1000);
-            }
-        }
-        
-        async function twilioCall() {
-            if (!currentLead) {
-                alert('No lead selected');
-                return;
-            }
-            
-            // Show loading state
-            const callButton = event.target.closest('button');
-            const originalHTML = callButton.innerHTML;
-            callButton.disabled = true;
-            callButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
-            
-            try {
-                const response = await fetch('/api/call/initiate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        lead_id: currentLead.id,
-                        customer_mobile: currentLead.mobile,
-                        // user_mobile can be set here if needed, otherwise uses username
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Show success message
-                    showNotification(data.message || 'Call initiated successfully!', 'success');
-                    
-                    // Open quick log after 2 seconds
-                    setTimeout(() => {
-                        showQuickLog();
-                    }, 2000);
-                } else {
-                    showNotification(data.error || 'Failed to initiate call', 'danger');
-                }
-            } catch (error) {
-                console.error('Error initiating call:', error);
-                showNotification('Error connecting to calling service', 'danger');
-            } finally {
-                // Restore button state
-                callButton.disabled = false;
-                callButton.innerHTML = originalHTML;
             }
         }
         
