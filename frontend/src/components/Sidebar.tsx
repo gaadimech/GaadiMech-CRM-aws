@@ -11,8 +11,14 @@ const API_BASE =
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/add-lead", label: "Add Lead" },
+  { href: "/todays-leads", label: "Today's Leads" },
   { href: "/followups", label: "View Followups" },
   { href: "/whatsapp-templates", label: "Whatsapp Templates" },
+];
+
+const adminNavItems = [
+  { href: "/admin/leads", label: "Admin Leads" },
+  { href: "/password-manager", label: "Password Manager" },
 ];
 
 export default function Sidebar() {
@@ -126,17 +132,22 @@ export default function Sidebar() {
             </Link>
           ))}
           {isAdmin && (
-            <Link
-              href="/admin/leads"
-              onClick={() => setIsOpen(false)}
-              className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-                pathname === "/admin/leads"
-                  ? "bg-zinc-100 text-zinc-900"
-                  : "text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900"
-              }`}
-            >
-              Admin Leads
-            </Link>
+            <>
+              {adminNavItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition ${
+                    pathname === item.href
+                      ? "bg-zinc-100 text-zinc-900"
+                      : "text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </>
           )}
         </nav>
 

@@ -251,16 +251,16 @@ class CustomerInfoParser:
         ]
         
         if not result['manufacturer']:
-            for pattern in manufacturer_patterns:
-                matches = re.findall(pattern, text_lower)
-                if matches:
-                    manufacturer = matches[0].strip()
-                    for mfg in self.car_manufacturers.keys():
-                        if mfg in manufacturer.lower():
-                            result['manufacturer'] = mfg.title()
-                            break
-                    if result['manufacturer']:
+        for pattern in manufacturer_patterns:
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                manufacturer = matches[0].strip()
+                for mfg in self.car_manufacturers.keys():
+                    if mfg in manufacturer.lower():
+                        result['manufacturer'] = mfg.title()
                         break
+                if result['manufacturer']:
+                    break
         
         # Look for model patterns (including emoji pattern)
         model_patterns = [
@@ -270,21 +270,21 @@ class CustomerInfoParser:
         ]
         
         if not result['model']:
-            for pattern in model_patterns:
-                matches = re.findall(pattern, text_lower)
-                if matches:
-                    model = matches[0].strip()
-                    # Check if it's a valid model for the manufacturer
-                    if result['manufacturer']:
-                        mfg_key = result['manufacturer'].lower()
-                        if mfg_key in self.car_manufacturers:
-                            for valid_model in self.car_manufacturers[mfg_key]:
-                                if valid_model.lower() in model.lower():
-                                    result['model'] = valid_model.title()
-                                    break
-                    if not result['model']:
-                        result['model'] = model.strip().title()
-                    break
+        for pattern in model_patterns:
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                model = matches[0].strip()
+                # Check if it's a valid model for the manufacturer
+                if result['manufacturer']:
+                    mfg_key = result['manufacturer'].lower()
+                    if mfg_key in self.car_manufacturers:
+                        for valid_model in self.car_manufacturers[mfg_key]:
+                            if valid_model.lower() in model.lower():
+                                result['model'] = valid_model.title()
+                                break
+                if not result['model']:
+                    result['model'] = model.strip().title()
+                break
         
         # If no explicit manufacturer found, try to infer from context
         if not result['manufacturer']:
@@ -293,10 +293,10 @@ class CustomerInfoParser:
                     result['manufacturer'] = mfg.title()
                     # Try to find corresponding model
                     if not result['model']:
-                        for model in models:
-                            if model in text_lower:
-                                result['model'] = model.title()
-                                break
+                    for model in models:
+                        if model in text_lower:
+                            result['model'] = model.title()
+                            break
                     break
         
         return result

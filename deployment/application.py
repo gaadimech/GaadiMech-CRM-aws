@@ -1354,8 +1354,10 @@ def admin_leads():
         search = request.args.get('search', '')
         created_date = request.args.get('created_date', '')
         
-        # Base query for unassigned leads
-        unassigned_query = UnassignedLead.query
+        # Base query for unassigned leads (eager-load assignments and assignees)
+        unassigned_query = UnassignedLead.query.options(
+            db.joinedload(UnassignedLead.assignments).joinedload(TeamAssignment.assigned_to)
+        )
         
         # Apply filters
         if search:
@@ -1582,6 +1584,118 @@ def edit_unassigned_lead(lead_id):
         flash('Error updating lead. Please try again.', 'error')
         return redirect(url_for('admin_leads'))
 
+@application.route('/api/team-leads', methods=['GET'])
+@login_required
+def api_team_leads():
+    """Get team leads assigned to the current user"""
+    try:
+        # Get today's date
+        today = datetime.now(ist).date()
+        
+        # Get date filter from query params
+        assigned_date_str = request.args.get('assigned_date', '')
+        search = request.args.get('search', '')
+        
+        # Build query for assignments
+        assignments_query = TeamAssignment.query.join(
+            UnassignedLead,
+            TeamAssignment.unassigned_lead_id == UnassignedLead.id
+        ).filter(
+            TeamAssignment.assigned_to_user_id == current_user.id
+        )
+        
+        # Apply date filter
+        if assigned_date_str:
+            try:
+                filter_date = datetime.strptime(assigned_date_str, '%Y-%m-%d').date()
+                assignments_query = assignments_query.filter(
+                    TeamAssignment.assigned_date == filter_date
+                )
+            except ValueError:
+                pass
+        else:
+            # Default to today if no date specified
+            assignments_query = assignments_query.filter(
+                TeamAssignment.assigned_date == today
+            )
+        
+        # Apply search filter
+        if search:
+            assignments_query = assignments_query.filter(
+                db.or_(
+                    UnassignedLead.customer_name.ilike(f'%{search}%'),
+                    UnassignedLead.car_manufacturer.ilike(f'%{search}%'),
+                    UnassignedLead.car_model.ilike(f'%{search}%'),
+                    UnassignedLead.mobile.ilike(f'%{search}%')
+                )
+            )
+        
+        # Eager load relationships
+        assignments_query = assignments_query.options(
+            db.joinedload(TeamAssignment.unassigned_lead)
+        )
+        
+        # Get all assignments
+        assignments = assignments_query.order_by(TeamAssignment.assigned_at.desc()).all()
+        
+        # Format response
+        leads_data = []
+        for assignment in assignments:
+            unassigned_lead = assignment.unassigned_lead
+            
+            # Combine car manufacturer and model
+            car_model = None
+            if unassigned_lead.car_manufacturer and unassigned_lead.car_model:
+                car_model = f"{unassigned_lead.car_manufacturer} {unassigned_lead.car_model}"
+            elif unassigned_lead.car_manufacturer:
+                car_model = unassigned_lead.car_manufacturer
+            elif unassigned_lead.car_model:
+                car_model = unassigned_lead.car_model
+            
+            # Format scheduled date
+            scheduled_date_str = ''
+            if unassigned_lead.scheduled_date:
+                scheduled_date_ist = unassigned_lead.scheduled_date
+                if scheduled_date_ist.tzinfo is None:
+                    scheduled_date_ist = ist.localize(scheduled_date_ist)
+                scheduled_date_str = scheduled_date_ist.strftime('%Y-%m-%d')
+            
+            leads_data.append({
+                'assignment_id': assignment.id,
+                'customer_name': unassigned_lead.customer_name or 'Unknown Customer',
+                'mobile': unassigned_lead.mobile,
+                'car_model': car_model or '',
+                'service_type': unassigned_lead.service_type or '',
+                'pickup_type': unassigned_lead.pickup_type or '',
+                'scheduled_date': scheduled_date_str,
+                'source': unassigned_lead.source or '',
+                'status': assignment.status,
+                'added_to_crm': assignment.added_to_crm,
+                'assigned_at': assignment.assigned_at.isoformat() if assignment.assigned_at else None,
+                'assigned_date': assignment.assigned_date.strftime('%Y-%m-%d') if assignment.assigned_date else None
+            })
+        
+        # Calculate statistics
+        total_assigned = len(leads_data)
+        pending = sum(1 for lead in leads_data if not lead['added_to_crm'])
+        contacted = sum(1 for lead in leads_data if lead['status'] == 'Contacted')
+        added_to_crm = sum(1 for lead in leads_data if lead['added_to_crm'])
+        
+        return jsonify({
+            'success': True,
+            'leads': leads_data,
+            'statistics': {
+                'total_assigned': total_assigned,
+                'pending': pending,
+                'contacted': contacted,
+                'added_to_crm': added_to_crm
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error fetching team leads: {e}")
+        return jsonify({'success': False, 'message': 'Error fetching team leads'}), 500
+
 @application.route('/api/team-leads/assignment/<int:assignment_id>', methods=['GET'])
 @login_required
 def get_assignment_details(assignment_id):
@@ -1616,13 +1730,101 @@ def get_assignment_details(assignment_id):
             'car_registration': '',  # Default empty, user can edit
             'car_model': car_model or '',  # Combined manufacturer and model
             'followup_date': datetime.now(ist).date().strftime('%Y-%m-%d'),  # Default to today
-            'status': 'New Lead',
+            'status': 'New Lead',  # Default status is always "New Lead" for team leads
             'remarks': ''  # Keep remarks empty by default
         })
         
     except Exception as e:
         print(f"Error fetching assignment details: {e}")
         return jsonify({'success': False, 'message': 'Error fetching assignment details'})
+
+@application.route('/api/admin/unassigned-leads', methods=['GET'])
+@login_required
+def api_admin_unassigned_leads():
+    """Get unassigned leads for admin"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        search = request.args.get('search', '')
+        created_date = request.args.get('created_date', '')
+        
+        query = UnassignedLead.query
+        
+        # Apply search filter
+        if search:
+            query = query.filter(
+                db.or_(
+                    UnassignedLead.customer_name.ilike(f'%{search}%'),
+                    UnassignedLead.mobile.ilike(f'%{search}%'),
+                    UnassignedLead.car_manufacturer.ilike(f'%{search}%'),
+                    UnassignedLead.car_model.ilike(f'%{search}%')
+                )
+            )
+        
+        # Apply date filter
+        if created_date:
+            try:
+                filter_date = datetime.strptime(created_date, '%Y-%m-%d').date()
+                start_date = ist.localize(datetime.combine(filter_date, datetime.min.time()))
+                end_date = start_date + timedelta(days=1)
+                start_date_utc = start_date.astimezone(pytz.UTC)
+                end_date_utc = end_date.astimezone(pytz.UTC)
+                
+                query = query.filter(
+                    UnassignedLead.created_at >= start_date_utc,
+                    UnassignedLead.created_at < end_date_utc
+                )
+            except ValueError:
+                pass
+        
+        # Get recent leads
+        unassigned_leads = query.order_by(UnassignedLead.created_at.desc()).limit(100).all()
+        
+        # Convert to JSON
+        leads = []
+        for lead in unassigned_leads:
+            # Get current assignment if any
+            current_assignment = TeamAssignment.query.filter_by(
+                unassigned_lead_id=lead.id
+            ).order_by(TeamAssignment.assigned_at.desc()).first()
+            
+            assigned_to = None
+            added_to_crm = False
+            if current_assignment:
+                assigned_user = User.query.get(current_assignment.assigned_to_user_id)
+                assigned_to = assigned_user.name if assigned_user else None
+                added_to_crm = current_assignment.added_to_crm or False
+            
+            # Combine manufacturer and model for display
+            combined_car_model = None
+            if lead.car_manufacturer and lead.car_model:
+                combined_car_model = f"{lead.car_manufacturer} {lead.car_model}"
+            elif lead.car_manufacturer:
+                combined_car_model = lead.car_manufacturer
+            elif lead.car_model:
+                combined_car_model = lead.car_model
+            
+            leads.append({
+                'id': lead.id,
+                'mobile': lead.mobile,
+                'customer_name': lead.customer_name or '',
+                'car_model': combined_car_model or '',  # Combined manufacturer and model
+                'pickup_type': lead.pickup_type or '',
+                'service_type': lead.service_type or '',
+                'scheduled_date': lead.scheduled_date.isoformat() if lead.scheduled_date else None,
+                'source': lead.source or '',
+                'remarks': lead.remarks or '',
+                'created_at': lead.created_at.isoformat() if lead.created_at else None,
+                'assigned_to': assigned_to,
+                'added_to_crm': added_to_crm  # Track if lead has been added to CRM
+            })
+        
+        return jsonify({'leads': leads})
+        
+    except Exception as e:
+        print(f"Error in api_admin_unassigned_leads: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @application.route('/api/admin/unassigned-leads/<int:lead_id>', methods=['DELETE'])
 @login_required

@@ -19,6 +19,7 @@ interface UnassignedLead {
   remarks?: string;
   created_at: string;
   assigned_to?: string;
+  added_to_crm?: boolean; // Track if lead has been added to CRM
 }
 
 interface TeamMember {
@@ -41,15 +42,15 @@ export default function AdminLeadsPage() {
     const todayStr = `${year}-${month}-${day}`;
     
     return {
-      mobile: "",
-      customer_name: "",
+    mobile: "",
+    customer_name: "",
       car_model: "", // Combined manufacturer and model
-      pickup_type: "",
+    pickup_type: "",
       service_type: "Express Car Service", // Default service type
       scheduled_date: todayStr, // Default to today
-      source: "Website",
+    source: "Website",
       remarks: "", // Keep empty by default
-      assign_to: "",
+    assign_to: "",
     };
   });
   const [search, setSearch] = useState("");
@@ -160,7 +161,7 @@ export default function AdminLeadsPage() {
 
     setSubmitting(true);
     const startTime = Date.now();
-    
+
     try {
       const formDataToSend = new URLSearchParams();
       Object.entries(formData).forEach(([key, value]) => {
@@ -322,19 +323,19 @@ export default function AdminLeadsPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1">
-                    Car Model
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.car_model}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, car_model: e.target.value }))
-                    }
-                    className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-700 mb-1">
+                      Car Model
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.car_model}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, car_model: e.target.value }))
+                      }
+                      className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
                     placeholder="e.g., Maruti Celerio, Hyundai i20, Honda City"
-                  />
+                    />
                   <p className="mt-1 text-xs text-zinc-500">
                     Optional: Enter car manufacturer and model together
                   </p>
@@ -513,14 +514,19 @@ export default function AdminLeadsPage() {
                             Assigned to: {lead.assigned_to}
                           </p>
                         )}
+                        {lead.added_to_crm && (
+                          <span className="inline-block mt-1 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded">
+                            Added to CRM
+                          </span>
+                        )}
                       </div>
                       <div className="flex gap-2">
-                        <a
-                          href={`tel:${lead.mobile}`}
+                      <a
+                        href={`tel:${lead.mobile}`}
                           className="px-3 py-1.5 bg-black text-white text-xs rounded-lg hover:bg-zinc-800 whitespace-nowrap"
-                        >
-                          Call
-                        </a>
+                      >
+                        Call
+                      </a>
                         <button
                           onClick={() => handleDeleteLead(lead.id)}
                           disabled={deletingLeadId === lead.id}

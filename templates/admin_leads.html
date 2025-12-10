@@ -610,6 +610,7 @@
                                             <th>Name</th>
                                             <th>Service</th>
                                             <th>Team Member</th>
+                                            <th>Added?</th>
                                             <th>Date</th>
                                             <th>Action</th>
                                         </tr>
@@ -634,6 +635,19 @@
                                                 {% else %}
                                                     <span class="badge bg-warning">Unassigned</span>
                                                 {% endfor %}
+                                            </td>
+                                            {% set added = false %}
+                                            {% for assignment in lead.assignments %}
+                                                {% if assignment.added_to_crm %}
+                                                    {% set added = true %}
+                                                {% endif %}
+                                            {% endfor %}
+                                            <td>
+                                                {% if added %}
+                                                    <span class="badge bg-success">Added to CRM</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Pending</span>
+                                                {% endif %}
                                             </td>
                                             <td>{{ lead.created_at.strftime('%m/%d') }}</td>
                                             <td>
