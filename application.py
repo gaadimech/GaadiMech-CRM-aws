@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, time
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
 import os
+import sys
 from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address   
@@ -13,6 +14,8 @@ from flask_migrate import Migrate
 from pytz import timezone
 import pytz
 from sqlalchemy import text
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 # Load environment variables
 load_dotenv()
@@ -684,6 +687,40 @@ def capture_daily_snapshot():
     except Exception as e:
         print(f"Error in daily snapshot: {e}")
         db.session.rollback()
+
+# Initialize scheduler for daily snapshot (after function definition)
+def init_scheduler():
+    """Initialize and start the background scheduler for daily snapshots"""
+    # Check if we should run the scheduler
+    # In production with gunicorn, we might have multiple workers
+    # Only start scheduler if explicitly enabled or running in development
+    enable_scheduler = os.getenv('ENABLE_SCHEDULER', 'true').lower() == 'true'
+    
+    # Check if we're running under gunicorn (production)
+    is_gunicorn = 'gunicorn' in os.environ.get('SERVER_SOFTWARE', '').lower() or \
+                  'gunicorn' in ' '.join(sys.argv)
+    
+    if is_gunicorn and not enable_scheduler:
+        print("ℹ️  Scheduler disabled in gunicorn mode (set ENABLE_SCHEDULER=true to enable)")
+        print("   Consider using a separate scheduler process or cron job for production")
+        return None
+    
+    try:
+        scheduler = BackgroundScheduler(timezone=ist)
+        scheduler.add_job(
+            func=capture_daily_snapshot,
+            trigger=CronTrigger(hour=5, minute=0, timezone=ist),  # 5:00 AM IST daily
+            id='daily_snapshot_job',
+            name='Daily Followup Snapshot at 5 AM IST',
+            replace_existing=True
+        )
+        scheduler.start()
+        print("✅ Daily snapshot scheduler started - will run at 5:00 AM IST daily")
+        return scheduler
+    except Exception as e:
+        print(f"⚠️  Failed to start scheduler: {e}")
+        print("   Daily snapshot will need to be triggered manually via /api/trigger-snapshot")
+        return None
 
 def record_worked_lead(lead_id, user_id, old_followup_date, new_followup_date):
     """
@@ -1702,8 +1739,8 @@ def api_dashboard_team_performance():
                 'new_leads': new_leads_count
             })
         
-        # Sort by completion rate
-        team_performance.sort(key=lambda x: x['completion_rate'], reverse=True)
+        # Sort by assigned in descending order
+        team_performance.sort(key=lambda x: x['assigned'], reverse=True)
         
         return jsonify(team_performance)
         
@@ -3615,8 +3652,18 @@ if __name__ == '__main__':
         import traceback
         traceback.print_exc()
     
+    # Start scheduler for daily snapshots
+    # Note: In production with gunicorn, this will run in each worker
+    # Consider using a separate scheduler process or Redis-based locking
+    scheduler_instance = init_scheduler()
+    
     port = int(os.environ.get('PORT', 5000))
     print(f"Starting application on port {port}")
     
-    # Run without debug mode for better stability
-    application.run(host='0.0.0.0', port=port, debug=False) 
+    try:
+        # Run without debug mode for better stability
+        application.run(host='0.0.0.0', port=port, debug=False)
+    finally:
+        # Shutdown scheduler on app exit
+        if scheduler_instance:
+            scheduler_instance.shutdown() 
