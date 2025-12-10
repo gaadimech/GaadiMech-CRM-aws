@@ -82,12 +82,12 @@ export default function AddLeadPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-2xl px-4 py-6">
-        <div className="bg-white rounded-xl border border-zinc-200 p-6">
-          <h1 className="text-2xl font-bold text-zinc-900 mb-6">Add New Lead</h1>
+      <div className="mx-auto max-w-2xl px-3 sm:px-4 py-4 sm:py-6">
+        <div className="bg-white rounded-2xl border border-zinc-200 p-4 sm:p-6 shadow-sm">
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 mb-4 sm:mb-6">Add New Lead</h1>
 
           {error && (
-            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+            <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-800">
               {error}
             </div>
           )}
@@ -96,7 +96,7 @@ export default function AddLeadPage() {
             <div>
               <label
                 htmlFor="customer_name"
-                className="block text-sm font-medium text-zinc-700 mb-1"
+                className="block text-sm font-medium text-zinc-700 mb-1.5"
               >
                 Customer Name *
               </label>
@@ -107,7 +107,7 @@ export default function AddLeadPage() {
                 value={formData.customer_name}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
                 placeholder="Enter customer name"
               />
             </div>
@@ -115,7 +115,7 @@ export default function AddLeadPage() {
             <div>
               <label
                 htmlFor="mobile"
-                className="block text-sm font-medium text-zinc-700 mb-1"
+                className="block text-sm font-medium text-zinc-700 mb-1.5"
               >
                 Mobile Number *
               </label>
@@ -127,99 +127,94 @@ export default function AddLeadPage() {
                 onChange={handleChange}
                 required
                 pattern="(\+91[0-9]{10}|[0-9]{10}|91[0-9]{10})"
-                className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                placeholder="Enter mobile: +917404625111, 7404625111, or 917404625111"
-              />
-              <p className="mt-1 text-xs text-zinc-500">
-                Enter mobile number
-              </p>
-            </div>
-
-            <div>
-              <label
-                htmlFor="car_registration"
-                className="block text-sm font-medium text-zinc-700 mb-1"
-              >
-                Car Registration Number
-              </label>
-              <input
-                id="car_registration"
-                name="car_registration"
-                type="text"
-                value={formData.car_registration}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                placeholder="Type your vehicle registration number"
-              />
-              <p className="mt-1 text-xs text-zinc-500">
-                Optional: Enter vehicle registration number
-              </p>
-            </div>
-
-            <div>
-              <label
-                htmlFor="car_model"
-                className="block text-sm font-medium text-zinc-700 mb-1"
-              >
-                Car Model
-              </label>
-              <input
-                id="car_model"
-                name="car_model"
-                type="text"
-                value={formData.car_model}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                placeholder="e.g., Maruti Celerio, Hyundai i20, Honda City"
-              />
-              <p className="mt-1 text-xs text-zinc-500">
-                Optional: Enter car manufacturer and model
-              </p>
-            </div>
-
-            <div>
-              <label
-                htmlFor="followup_date"
-                className="block text-sm font-medium text-zinc-700 mb-1"
-              >
-                Followup Date *
-              </label>
-              <input
-                id="followup_date"
-                name="followup_date"
-                type="date"
-                value={formData.followup_date}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                placeholder="+917404625111 or 7404625111"
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="status"
-                className="block text-sm font-medium text-zinc-700 mb-1"
-              >
-                Status *
-              </label>
-              <select
-                id="status"
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-              >
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="car_registration"
+                  className="block text-sm font-medium text-zinc-700 mb-1.5"
+                >
+                  Car Registration
+                </label>
+                <input
+                  id="car_registration"
+                  name="car_registration"
+                  type="text"
+                  value={formData.car_registration}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                  placeholder="Registration no."
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="car_model"
+                  className="block text-sm font-medium text-zinc-700 mb-1.5"
+                >
+                  Car Model
+                </label>
+                <input
+                  id="car_model"
+                  name="car_model"
+                  type="text"
+                  value={formData.car_model}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                  placeholder="e.g., Maruti Celerio"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="followup_date"
+                  className="block text-sm font-medium text-zinc-700 mb-1.5"
+                >
+                  Followup Date *
+                </label>
+                <input
+                  id="followup_date"
+                  name="followup_date"
+                  type="date"
+                  value={formData.followup_date}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="status"
+                  className="block text-sm font-medium text-zinc-700 mb-1.5"
+                >
+                  Status *
+                </label>
+                <select
+                  id="status"
+                  name="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                >
+                  {STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-1.5">
                 <label
                   htmlFor="remarks"
                   className="block text-sm font-medium text-zinc-700"
@@ -240,23 +235,23 @@ export default function AddLeadPage() {
                 value={formData.remarks}
                 onChange={handleChange}
                 rows={4}
-                className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                placeholder="Add any additional notes or comments... (Click mic icon to use voice input)"
+                className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                placeholder="Notes or comments (use mic for voice)"
               />
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-2 pt-4">
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 bg-zinc-900 text-white py-2.5 rounded-lg font-medium hover:bg-zinc-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-zinc-900 text-white py-3 rounded-xl font-medium hover:bg-zinc-800 active:bg-zinc-700 transition disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
               >
                 {loading ? "Adding..." : "Add Lead"}
               </button>
               <button
                 type="button"
                 onClick={() => router.back()}
-                className="px-6 py-2.5 border border-zinc-300 rounded-lg font-medium text-zinc-700 hover:bg-zinc-100 transition"
+                className="px-5 py-3 border border-zinc-300 rounded-xl font-medium text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200 transition touch-manipulation"
               >
                 Cancel
               </button>

@@ -146,20 +146,20 @@ export default function LeadDetailDialog({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-2xl max-h-[90vh] sm:max-h-[85vh] overflow-y-auto sm:m-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-zinc-200 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-zinc-900">
+        <div className="sticky top-0 bg-white p-4 sm:p-6 border-b border-zinc-200 flex items-center justify-between z-10">
+          <h2 className="text-lg sm:text-xl font-semibold text-zinc-900">
             Lead Details
           </h2>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-600"
+            className="p-2 -mr-2 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 transition touch-manipulation"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -167,11 +167,11 @@ export default function LeadDetailDialog({
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           {isEditing ? (
             <>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                   Customer Name
                 </label>
                 <input
@@ -180,11 +180,11 @@ export default function LeadDetailDialog({
                   onChange={(e) =>
                     setFormData({ ...formData, customer_name: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
+                  className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm touch-manipulation"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                   Mobile
                 </label>
                 <input
@@ -194,70 +194,74 @@ export default function LeadDetailDialog({
                     setFormData({ ...formData, mobile: e.target.value })
                   }
                   pattern="(\+91[0-9]{10}|[0-9]{10}|91[0-9]{10})"
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
-                  placeholder="+917404625111, 7404625111, or 917404625111"
+                  className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm touch-manipulation"
+                  placeholder="+917404625111 or 7404625111"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Car Registration
-                </label>
-                <input
-                  type="text"
-                  value={formData.car_registration}
-                  onChange={(e) =>
-                    setFormData({ ...formData, car_registration: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                    Car Registration
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.car_registration}
+                    onChange={(e) =>
+                      setFormData({ ...formData, car_registration: e.target.value })
+                    }
+                    className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm touch-manipulation"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                    Car Model
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.car_model}
+                    onChange={(e) =>
+                      setFormData({ ...formData, car_model: e.target.value })
+                    }
+                    className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm touch-manipulation"
+                    placeholder="e.g., Maruti Celerio"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                    Followup Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.followup_date}
+                    onChange={(e) =>
+                      setFormData({ ...formData, followup_date: e.target.value })
+                    }
+                    className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm touch-manipulation"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                    Status
+                  </label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) =>
+                      setFormData({ ...formData, status: e.target.value as LeadStatus })
+                    }
+                    className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm touch-manipulation"
+                  >
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Car Model
-                </label>
-                <input
-                  type="text"
-                  value={formData.car_model}
-                  onChange={(e) =>
-                    setFormData({ ...formData, car_model: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
-                  placeholder="e.g., Maruti Celerio, Hyundai i20"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Followup Date
-                </label>
-                <input
-                  type="date"
-                  value={formData.followup_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, followup_date: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Status
-                </label>
-                <select
-                  value={formData.status}
-                  onChange={(e) =>
-                    setFormData({ ...formData, status: e.target.value as LeadStatus })
-                  }
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
-                >
-                  {STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-sm font-medium text-zinc-700">
                     Remarks
                   </label>
@@ -275,68 +279,80 @@ export default function LeadDetailDialog({
                     setFormData({ ...formData, remarks: e.target.value })
                   }
                   rows={4}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
-                  placeholder="Click mic icon to use voice input"
+                  className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm touch-manipulation"
+                  placeholder="Use mic for voice input"
                 />
               </div>
             </>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-4">
+              {/* Quick contact action for mobile */}
+              <div className="sm:hidden flex gap-2 pb-3 border-b border-zinc-100">
+                <a
+                  href={`tel:${lead.mobile}`}
+                  className="flex-1 px-4 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-medium text-center touch-manipulation"
+                >
+                  Call
+                </a>
+                <a
+                  href={`https://wa.me/${lead.mobile?.replace(/[^\d]/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium text-center touch-manipulation"
+                >
+                  WhatsApp
+                </a>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <p className="text-xs text-zinc-500 mb-1">Customer Name</p>
+                  <p className="text-xs text-zinc-500 mb-0.5">Customer Name</p>
                   <p className="text-sm font-medium text-zinc-900">
                     {lead.customer_name || "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-500 mb-1">Mobile</p>
-                  <p className="text-sm font-medium text-zinc-900">
+                  <p className="text-xs text-zinc-500 mb-0.5">Mobile</p>
+                  <a href={`tel:${lead.mobile}`} className="text-sm font-medium text-blue-600">
                     {lead.mobile || "—"}
-                  </p>
+                  </a>
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-500 mb-1">Car Registration</p>
+                  <p className="text-xs text-zinc-500 mb-0.5">Car Registration</p>
                   <p className="text-sm font-medium text-zinc-900">
                     {lead.car_registration || "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-500 mb-1">Car Model</p>
+                  <p className="text-xs text-zinc-500 mb-0.5">Car Model</p>
                   <p className="text-sm font-medium text-zinc-900">
                     {(lead as any).car_model || "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-500 mb-1">Status</p>
+                  <p className="text-xs text-zinc-500 mb-0.5">Status</p>
                   <StatusBadge status={lead.status} />
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-500 mb-1">Followup Date</p>
+                  <p className="text-xs text-zinc-500 mb-0.5">Followup Date</p>
                   <p className="text-sm font-medium text-zinc-900">
                     {formatDateIST(lead.followup_date)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-500 mb-1">Created</p>
+                  <p className="text-xs text-zinc-500 mb-0.5">Created</p>
                   <p className="text-sm font-medium text-zinc-900">
                     {lead.created_at ? formatDateTimeIST(lead.created_at) : "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-500 mb-1">Modified</p>
+                  <p className="text-xs text-zinc-500 mb-0.5">Modified</p>
                   <p className="text-sm font-medium text-zinc-900">
                     {lead.modified_at ? formatDateTimeIST(lead.modified_at) : "—"}
                   </p>
                 </div>
-                <div>
-                  <p className="text-xs text-zinc-500 mb-1">Created By</p>
-                  <p className="text-sm font-medium text-zinc-900">
-                    {lead.creator_name || "—"}
-                  </p>
-                </div>
               </div>
-              <div>
+              <div className="pt-3 border-t border-zinc-100">
                 <p className="text-xs text-zinc-500 mb-1">Remarks</p>
                 <p className="text-sm text-zinc-900 whitespace-pre-wrap">
                   {lead.remarks || "—"}
@@ -346,51 +362,49 @@ export default function LeadDetailDialog({
           )}
         </div>
 
-        <div className="p-6 border-t border-zinc-200 flex items-center justify-between gap-2">
-          <div>
-            {isAdmin && !isEditing && (
+        <div className="sticky bottom-0 bg-white p-4 sm:p-6 border-t border-zinc-200">
+          {isEditing ? (
+            <div className="flex gap-2">
               <button
-                onClick={handleDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+                onClick={() => setIsEditing(false)}
+                className="flex-1 sm:flex-none px-4 py-2.5 border border-zinc-300 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200 transition touch-manipulation"
               >
-                Delete
+                Cancel
               </button>
-            )}
-          </div>
-          <div className="flex gap-2">
-            {isEditing ? (
-              <>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 sm:flex-none px-4 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-medium hover:bg-zinc-800 active:bg-zinc-700 disabled:opacity-50 transition touch-manipulation"
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-2">
+              {isAdmin && (
                 <button
-                  onClick={() => setIsEditing(false)}
-                  className="px-4 py-2 border border-zinc-300 rounded-lg text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                  onClick={handleDelete}
+                  className="sm:mr-auto px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 active:bg-red-800 transition touch-manipulation"
                 >
-                  Cancel
+                  Delete Lead
                 </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-medium hover:bg-zinc-800 disabled:opacity-50"
-                >
-                  {saving ? "Saving..." : "Save"}
-                </button>
-              </>
-            ) : (
-              <>
+              )}
+              <div className="flex gap-2 flex-1 sm:flex-none">
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 border border-zinc-300 rounded-lg text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                  className="flex-1 sm:flex-none px-4 py-2.5 border border-zinc-300 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200 transition touch-manipulation"
                 >
                   Close
                 </button>
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-medium hover:bg-zinc-800"
+                  className="flex-1 sm:flex-none px-4 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-medium hover:bg-zinc-800 active:bg-zinc-700 transition touch-manipulation"
                 >
                   Edit
                 </button>
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

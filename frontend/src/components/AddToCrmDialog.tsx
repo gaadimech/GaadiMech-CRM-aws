@@ -159,15 +159,15 @@ export default function AddToCrmDialog({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
-        <div className="sticky top-0 bg-white border-b border-zinc-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-zinc-900">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-2xl max-h-[90vh] sm:max-h-[85vh] overflow-y-auto sm:m-4">
+        <div className="sticky top-0 bg-white border-b border-zinc-200 px-4 sm:px-6 py-4 flex items-center justify-between z-10">
+          <h2 className="text-lg sm:text-xl font-semibold text-zinc-900">
             Add Lead to CRM
           </h2>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-600 transition"
+            className="p-2 -mr-2 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 transition touch-manipulation"
           >
             <svg
               className="w-6 h-6"
@@ -183,9 +183,9 @@ export default function AddToCrmDialog({
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl text-sm">
               {error}
             </div>
           )}
@@ -195,7 +195,7 @@ export default function AddToCrmDialog({
           ) : (
             <>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                   Customer Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -204,14 +204,14 @@ export default function AddToCrmDialog({
                   onChange={(e) =>
                     setFormData({ ...formData, customer_name: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                  className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
                   placeholder="Enter customer name"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                   Mobile Number <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -221,88 +221,89 @@ export default function AddToCrmDialog({
                     setFormData({ ...formData, mobile: e.target.value })
                   }
                   pattern="(\+91[0-9]{10}|[0-9]{10}|91[0-9]{10})"
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                  placeholder="Enter +91XXXXXXXXXX, XXXXXXXXXX, or 91XXXXXXXXXX"
-                  required
-                />
-                <p className="mt-1 text-xs text-zinc-500">
-                  Enter 10 digits, or 91 followed by 10 digits, or +91 followed by 10 digits.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Car Registration
-                </label>
-                <input
-                  type="text"
-                  value={formData.car_registration}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      car_registration: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                  placeholder="Enter car registration number"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Car Model
-                </label>
-                <input
-                  type="text"
-                  value={formData.car_model}
-                  onChange={(e) =>
-                    setFormData({ ...formData, car_model: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                  placeholder="e.g., Maruti Swift"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Follow-up Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={formData.followup_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, followup_date: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                  className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                  placeholder="+917404625111 or 7404625111"
                   required
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Status <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.status}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      status: e.target.value as LeadStatus,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                  required
-                >
-                  {STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                    Car Registration
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.car_registration}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        car_registration: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                    placeholder="Registration"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                    Car Model
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.car_model}
+                    onChange={(e) =>
+                      setFormData({ ...formData, car_model: e.target.value })
+                    }
+                    className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                    placeholder="e.g., Maruti Swift"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                    Follow-up Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.followup_date}
+                    onChange={(e) =>
+                      setFormData({ ...formData, followup_date: e.target.value })
+                    }
+                    className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                    Status <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        status: e.target.value as LeadStatus,
+                      })
+                    }
+                    className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                    required
+                  >
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-sm font-medium text-zinc-700">
                     Remarks
                   </label>
@@ -320,26 +321,26 @@ export default function AddToCrmDialog({
                     setFormData({ ...formData, remarks: e.target.value })
                   }
                   rows={3}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                  placeholder="Enter any remarks or notes (or use the mic)"
+                  className="w-full px-3 py-2.5 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                  placeholder="Notes or remarks (use mic for voice)"
                 />
               </div>
             </>
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-white border-t border-zinc-200 px-6 py-4 flex gap-3">
+        <div className="sticky bottom-0 bg-white border-t border-zinc-200 px-4 sm:px-6 py-4 flex gap-2">
           <button
             onClick={handleSave}
             disabled={saving || loading}
-            className="flex-1 bg-zinc-900 text-white py-2.5 rounded-lg font-medium hover:bg-zinc-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 bg-zinc-900 text-white py-3 rounded-xl font-medium hover:bg-zinc-800 active:bg-zinc-700 transition disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
           >
             {saving ? "Adding..." : "Add to CRM"}
           </button>
           <button
             onClick={onClose}
             disabled={saving}
-            className="px-6 py-2.5 border border-zinc-300 rounded-lg font-medium text-zinc-700 hover:bg-zinc-100 transition disabled:opacity-50"
+            className="px-5 py-3 border border-zinc-300 rounded-xl font-medium text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200 transition disabled:opacity-50 touch-manipulation"
           >
             Cancel
           </button>

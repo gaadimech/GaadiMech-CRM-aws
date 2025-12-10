@@ -16,10 +16,11 @@ export default function MainLayout({
   }
 
   return (
-    <>
+    <div className="min-h-screen bg-zinc-50">
       <Sidebar />
-      <main className="min-h-screen bg-zinc-50">{children}</main>
-    </>
+      {/* Main content with padding-left on large screens for sidebar space */}
+      <main className="min-h-screen pt-16 sm:pt-4">{children}</main>
+    </div>
   );
 }
 

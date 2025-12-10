@@ -160,25 +160,25 @@ export default function FollowupsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-7xl px-2 sm:px-4 py-4 sm:py-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-zinc-900 mb-2">View Followups</h1>
+      <div className="mx-auto max-w-7xl px-3 sm:px-4 py-4 sm:py-6">
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 mb-1">View Followups</h1>
           <p className="text-sm text-zinc-600">Search and filter all leads</p>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-xl border border-zinc-200 p-4 mb-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="bg-white rounded-2xl border border-zinc-200 p-4 mb-4 sm:mb-6 shadow-sm">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {isAdmin && teamMembers.length > 0 && (
               <div>
-                <label className="block text-xs font-medium text-zinc-700 mb-1">
+                <label className="block text-xs font-medium text-zinc-700 mb-1.5">
                   Team Member
                 </label>
                 <select
                   name="user_id"
                   value={filters.user_id}
                   onChange={handleFilterChange}
-                  className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent bg-white"
+                  className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent bg-white touch-manipulation"
                 >
                   <option value="">All Team Members</option>
                   {teamMembers.map((member) => (
@@ -190,7 +190,7 @@ export default function FollowupsPage() {
               </div>
             )}
             <div>
-              <label className="block text-xs font-medium text-zinc-700 mb-1">
+              <label className="block text-xs font-medium text-zinc-700 mb-1.5">
                 Search
               </label>
               <input
@@ -198,12 +198,12 @@ export default function FollowupsPage() {
                 name="search"
                 value={filters.search}
                 onChange={handleFilterChange}
-                placeholder="Search name, mobile, car..."
-                className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                placeholder="Name, mobile, car..."
+                className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-700 mb-1">
+              <label className="block text-xs font-medium text-zinc-700 mb-1.5">
                 Followup Date
               </label>
               <input
@@ -211,11 +211,11 @@ export default function FollowupsPage() {
                 name="followup_date"
                 value={filters.followup_date}
                 onChange={handleFilterChange}
-                className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-700 mb-1">
+              <label className="block text-xs font-medium text-zinc-700 mb-1.5">
                 Created Date
               </label>
               <input
@@ -223,11 +223,11 @@ export default function FollowupsPage() {
                 name="created_date"
                 value={filters.created_date}
                 onChange={handleFilterChange}
-                className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-700 mb-1">
+              <label className="block text-xs font-medium text-zinc-700 mb-1.5">
                 Car Registration
               </label>
               <input
@@ -235,32 +235,19 @@ export default function FollowupsPage() {
                 name="car_registration"
                 value={filters.car_registration}
                 onChange={handleFilterChange}
-                placeholder="Enter registration number"
-                className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                placeholder="Registration number"
+                className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-700 mb-1">
-                Mobile Number
-              </label>
-              <input
-                type="tel"
-                name="mobile"
-                value={filters.mobile}
-                onChange={handleFilterChange}
-                placeholder="Enter mobile number"
-                className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 mb-1">
+              <label className="block text-xs font-medium text-zinc-700 mb-1.5">
                 Status
               </label>
               <select
                 name="status"
                 value={filters.status}
                 onChange={handleFilterChange}
-                className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
               >
                 {STATUS_OPTIONS.map((status) => (
                   <option key={status} value={status}>
@@ -273,13 +260,13 @@ export default function FollowupsPage() {
           <div className="flex gap-2 mt-4">
             <button
               onClick={loadFollowups}
-              className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-medium hover:bg-zinc-800"
+              className="flex-1 sm:flex-none px-4 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-medium hover:bg-zinc-800 active:bg-zinc-700 transition touch-manipulation"
             >
               Search
             </button>
             <button
               onClick={handleReset}
-              className="px-4 py-2 border border-zinc-300 rounded-lg text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+              className="flex-1 sm:flex-none px-4 py-2.5 border border-zinc-300 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200 transition touch-manipulation"
             >
               Reset
             </button>
@@ -287,30 +274,30 @@ export default function FollowupsPage() {
         </div>
 
         {/* Results */}
-        <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-          <div className="p-4 border-b border-zinc-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-zinc-900">
-              All Team Leads ({total} total, {leads.length} shown)
+        <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-zinc-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-base sm:text-lg font-semibold text-zinc-900">
+              All Leads ({total} total)
             </h2>
             {totalPages > 1 && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="p-2 border border-zinc-300 rounded-lg hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-10 h-10 flex items-center justify-center border border-zinc-300 rounded-xl hover:bg-zinc-100 active:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                   aria-label="Previous page"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <span className="text-sm text-zinc-600 px-2">
-                  Page {page} of {totalPages}
+                <span className="text-sm text-zinc-600 px-3 min-w-[80px] text-center">
+                  {page} / {totalPages}
                 </span>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="p-2 border border-zinc-300 rounded-lg hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-10 h-10 flex items-center justify-center border border-zinc-300 rounded-xl hover:bg-zinc-100 active:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                   aria-label="Next page"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -327,7 +314,60 @@ export default function FollowupsPage() {
             <div className="p-8 text-center text-zinc-500">No leads found</div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* Mobile Card View */}
+              <div className="sm:hidden divide-y divide-zinc-100">
+                {leads.map((lead) => (
+                  <div
+                    key={lead.id}
+                    onClick={() => handleRowClick(lead)}
+                    className="p-4 hover:bg-zinc-50 active:bg-zinc-100 transition touch-manipulation"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-zinc-900 truncate">
+                          {lead.customer_name || "Unnamed"}
+                        </h3>
+                        <a
+                          href={`tel:${lead.mobile}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-sm font-medium text-blue-600"
+                        >
+                          {lead.mobile}
+                        </a>
+                      </div>
+                      <StatusBadge status={lead.status} />
+                    </div>
+                    
+                    <div className="text-xs text-zinc-500 mb-3 space-y-0.5">
+                      <p>Followup: {formatDateIST(lead.followup_date)}</p>
+                      {lead.remarks && (
+                        <p className="text-zinc-600 line-clamp-1">{lead.remarks}</p>
+                      )}
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
+                      <ActionButtons lead={lead} compact />
+                      <button
+                        onClick={() => handleEdit(lead)}
+                        className="px-3 py-1.5 text-xs font-medium border border-zinc-300 rounded-lg text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation"
+                      >
+                        Edit
+                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDelete(lead)}
+                          className="px-3 py-1.5 text-xs font-medium border border-red-300 rounded-lg text-red-700 hover:bg-red-50 active:bg-red-100 touch-manipulation"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-zinc-50">
                     <tr>
@@ -338,19 +378,13 @@ export default function FollowupsPage() {
                         Mobile
                       </th>
                       <th className="text-left py-3 px-4 text-zinc-700 font-medium">
-                        Followup Date
+                        Followup
                       </th>
                       <th className="text-left py-3 px-4 text-zinc-700 font-medium">
                         Status
                       </th>
                       <th className="text-left py-3 px-4 text-zinc-700 font-medium">
                         Remarks
-                      </th>
-                      <th className="text-left py-3 px-4 text-zinc-700 font-medium">
-                        Created
-                      </th>
-                      <th className="text-left py-3 px-4 text-zinc-700 font-medium">
-                        Modified
                       </th>
                       <th className="text-left py-3 px-4 text-zinc-700 font-medium">
                         Actions
@@ -385,31 +419,19 @@ export default function FollowupsPage() {
                         <td className="py-3 px-4 text-zinc-600 max-w-xs truncate">
                           {lead.remarks || "—"}
                         </td>
-                        <td className="py-3 px-4 text-zinc-500 text-xs">
-                          {lead.created_at
-                            ? formatDateTimeIST(lead.created_at)
-                            : "—"}
-                        </td>
-                        <td className="py-3 px-4 text-zinc-500 text-xs">
-                          {lead.modified_at
-                            ? formatDateTimeIST(lead.modified_at)
-                            : "—"}
-                        </td>
                         <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-2">
                             <ActionButtons lead={lead} compact />
                             <button
                               onClick={() => handleEdit(lead)}
-                              className="px-2 py-1 text-xs border border-zinc-300 rounded text-zinc-700 hover:bg-zinc-100"
-                              title="Edit"
+                              className="px-2.5 py-1.5 text-xs border border-zinc-300 rounded-lg text-zinc-700 hover:bg-zinc-100"
                             >
                               Edit
                             </button>
                             {isAdmin && (
                               <button
                                 onClick={() => handleDelete(lead)}
-                                className="px-2 py-1 text-xs border border-red-300 rounded text-red-700 hover:bg-red-50"
-                                title="Delete"
+                                className="px-2.5 py-1.5 text-xs border border-red-300 rounded-lg text-red-700 hover:bg-red-50"
                               >
                                 Delete
                               </button>

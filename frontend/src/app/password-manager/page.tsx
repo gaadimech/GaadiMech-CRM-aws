@@ -222,31 +222,31 @@ export default function PasswordManagerPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-6xl px-4 py-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-zinc-900 mb-2">
+      <div className="mx-auto max-w-6xl px-3 sm:px-4 py-4 sm:py-6">
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 mb-1">
             Password Manager
           </h1>
           <p className="text-sm text-zinc-600">
-            Manage user passwords. Only admins can access this page.
+            Manage user passwords
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+          <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-800">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-4 rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-800">
+          <div className="mb-4 rounded-xl bg-green-50 border border-green-200 p-3 text-sm text-green-800">
             {success}
           </div>
         )}
 
-        <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-          <div className="p-4 border-b border-zinc-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-zinc-900">
+        <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-zinc-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-base sm:text-lg font-semibold text-zinc-900">
               All Users ({users.length})
             </h2>
             <button
@@ -258,20 +258,20 @@ export default function PasswordManagerPage() {
                   handleCancelAddUser();
                 }
               }}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition"
+              className="px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 active:bg-green-800 transition touch-manipulation"
             >
-              {showAddUser ? "Cancel" : "Add User"}
+              {showAddUser ? "Cancel" : "+ Add User"}
             </button>
           </div>
 
           {showAddUser && (
             <div className="p-4 border-b border-zinc-200 bg-zinc-50">
-              <h3 className="text-md font-semibold text-zinc-900 mb-3">
+              <h3 className="text-base font-semibold text-zinc-900 mb-3">
                 Add New User
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3 sm:grid sm:grid-cols-2 sm:gap-4 sm:space-y-0">
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1">
+                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">
                     Username *
                   </label>
                   <input
@@ -281,11 +281,11 @@ export default function PasswordManagerPage() {
                       setNewUserData({ ...newUserData, username: e.target.value })
                     }
                     placeholder="Enter username"
-                    className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                    className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1">
+                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">
                     Name *
                   </label>
                   <input
@@ -295,11 +295,11 @@ export default function PasswordManagerPage() {
                       setNewUserData({ ...newUserData, name: e.target.value })
                     }
                     placeholder="Enter full name"
-                    className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                    className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1">
+                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">
                     Password *
                   </label>
                   <input
@@ -308,12 +308,12 @@ export default function PasswordManagerPage() {
                     onChange={(e) =>
                       setNewUserData({ ...newUserData, password: e.target.value })
                     }
-                    placeholder="Enter password (min 6 characters)"
-                    className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                    placeholder="Min 6 characters"
+                    className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1">
+                  <label className="block text-xs font-medium text-zinc-700 mb-1.5">
                     Confirm Password *
                   </label>
                   <input
@@ -326,11 +326,11 @@ export default function PasswordManagerPage() {
                       })
                     }
                     placeholder="Confirm password"
-                    className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                    className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
                   />
                 </div>
-                <div className="md:col-span-2">
-                  <label className="flex items-center gap-2">
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2 py-1 touch-manipulation">
                     <input
                       type="checkbox"
                       checked={newUserData.is_admin}
@@ -340,7 +340,7 @@ export default function PasswordManagerPage() {
                           is_admin: e.target.checked,
                         })
                       }
-                      className="w-4 h-4 text-zinc-900 border-zinc-300 rounded focus:ring-zinc-900"
+                      className="w-5 h-5 text-zinc-900 border-zinc-300 rounded focus:ring-zinc-900"
                     />
                     <span className="text-sm text-zinc-700">
                       Admin privileges
@@ -351,13 +351,13 @@ export default function PasswordManagerPage() {
               <div className="flex gap-2 mt-4">
                 <button
                   onClick={handleAddUser}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition"
+                  className="flex-1 sm:flex-none px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 active:bg-green-800 transition touch-manipulation"
                 >
                   Create User
                 </button>
                 <button
                   onClick={handleCancelAddUser}
-                  className="px-4 py-2 border border-zinc-300 rounded-lg text-sm font-medium text-zinc-700 hover:bg-zinc-100 transition"
+                  className="flex-1 sm:flex-none px-4 py-2.5 border border-zinc-300 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200 transition touch-manipulation"
                 >
                   Cancel
                 </button>
@@ -365,7 +365,83 @@ export default function PasswordManagerPage() {
             </div>
           )}
 
-          <div className="overflow-x-auto">
+          {/* Mobile Card View */}
+          <div className="sm:hidden divide-y divide-zinc-100">
+            {users.map((user) => (
+              <div key={user.id} className="p-4">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-zinc-900">{user.name}</span>
+                      {user.is_admin ? (
+                        <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
+                          Admin
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-800 rounded-full">
+                          User
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-zinc-600">@{user.username}</p>
+                  </div>
+                </div>
+                
+                {editingUserId === user.id ? (
+                  <div className="space-y-2 pt-3 border-t border-zinc-100">
+                    <input
+                      type="password"
+                      placeholder="New Password"
+                      value={passwordData.newPassword}
+                      onChange={(e) =>
+                        setPasswordData({
+                          ...passwordData,
+                          newPassword: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                    />
+                    <input
+                      type="password"
+                      placeholder="Confirm Password"
+                      value={passwordData.confirmPassword}
+                      onChange={(e) =>
+                        setPasswordData({
+                          ...passwordData,
+                          confirmPassword: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-zinc-900 focus:border-transparent touch-manipulation"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleUpdatePassword(user.id)}
+                        className="flex-1 px-4 py-2.5 text-sm bg-zinc-900 text-white rounded-xl font-medium hover:bg-zinc-800 active:bg-zinc-700 transition touch-manipulation"
+                      >
+                        Update
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        className="flex-1 px-4 py-2.5 text-sm border border-zinc-300 rounded-xl font-medium text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200 transition touch-manipulation"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleEditClick(user.id)}
+                    className="w-full mt-3 px-4 py-2.5 text-sm bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 active:bg-blue-800 transition touch-manipulation"
+                  >
+                    Change Password
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-zinc-50">
                 <tr>
@@ -399,11 +475,11 @@ export default function PasswordManagerPage() {
                     <td className="py-3 px-4 text-zinc-900">{user.name}</td>
                     <td className="py-3 px-4">
                       {user.is_admin ? (
-                        <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
+                        <span className="px-2.5 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
                           Admin
                         </span>
                       ) : (
-                        <span className="px-2 py-1 text-xs font-medium bg-zinc-100 text-zinc-800 rounded-full">
+                        <span className="px-2.5 py-1 text-xs font-medium bg-zinc-100 text-zinc-800 rounded-full">
                           User
                         </span>
                       )}
@@ -411,44 +487,40 @@ export default function PasswordManagerPage() {
                     <td className="py-3 px-4">
                       {editingUserId === user.id ? (
                         <div className="space-y-2">
-                          <div>
-                            <input
-                              type="password"
-                              placeholder="New Password"
-                              value={passwordData.newPassword}
-                              onChange={(e) =>
-                                setPasswordData({
-                                  ...passwordData,
-                                  newPassword: e.target.value,
-                                })
-                              }
-                              className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <input
-                              type="password"
-                              placeholder="Confirm Password"
-                              value={passwordData.confirmPassword}
-                              onChange={(e) =>
-                                setPasswordData({
-                                  ...passwordData,
-                                  confirmPassword: e.target.value,
-                                })
-                              }
-                              className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                            />
-                          </div>
+                          <input
+                            type="password"
+                            placeholder="New Password"
+                            value={passwordData.newPassword}
+                            onChange={(e) =>
+                              setPasswordData({
+                                ...passwordData,
+                                newPassword: e.target.value,
+                              })
+                            }
+                            className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                          />
+                          <input
+                            type="password"
+                            placeholder="Confirm Password"
+                            value={passwordData.confirmPassword}
+                            onChange={(e) =>
+                              setPasswordData({
+                                ...passwordData,
+                                confirmPassword: e.target.value,
+                              })
+                            }
+                            className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                          />
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleUpdatePassword(user.id)}
-                              className="px-3 py-1.5 text-xs bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition"
+                              className="px-3 py-1.5 text-xs bg-zinc-900 text-white rounded-lg font-medium hover:bg-zinc-800 transition"
                             >
                               Update
                             </button>
                             <button
                               onClick={handleCancelEdit}
-                              className="px-3 py-1.5 text-xs border border-zinc-300 rounded-lg text-zinc-700 hover:bg-zinc-100 transition"
+                              className="px-3 py-1.5 text-xs border border-zinc-300 rounded-lg font-medium text-zinc-700 hover:bg-zinc-100 transition"
                             >
                               Cancel
                             </button>
@@ -457,7 +529,7 @@ export default function PasswordManagerPage() {
                       ) : (
                         <button
                           onClick={() => handleEditClick(user.id)}
-                          className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                          className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
                         >
                           Change Password
                         </button>

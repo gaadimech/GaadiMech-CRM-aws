@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ProtectedRoute from "../components/ProtectedRoute";
@@ -14,9 +14,25 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
   title: "GaadiMech CRM",
   description: "Telecaller-first CRM frontend",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "GaadiMech CRM",
+  },
+  formatDetection: {
+    telephone: true,
+  },
 };
 
 export default function RootLayout({
