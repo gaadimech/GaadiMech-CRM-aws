@@ -133,25 +133,34 @@ export default function DashboardPage() {
       });
       
       // Sort by status priority (most important first)
-      // Priority order: Confirmed > Feedback > Open > Completed > Needs Followup > New Lead > Did Not Pick Up
+      // Priority order: New Lead > Feedback > Confirmed > Open > Completed > Needs Followup > Did not Pick up
       const statusPriority: Record<string, number> = {
-        "Confirmed": 1,             // First priority
-        "Feedback": 2,              // Second priority
-        "Open": 3,                  // Third priority
-        "Completed": 4,             // Fourth priority
-        "Needs Followup": 5,        // Fifth priority
-        "New Lead": 6,              // Sixth priority
-        "Did Not Pick Up": 7,       // Seventh priority
+        "New Lead": 0,              // First priority
+        "Feedback": 1,              // Second priority
+        "Confirmed": 2,            // Third priority
+        "Open": 3,                  // Fourth priority
+        "Completed": 4,             // Fifth priority
+        "Needs Followup": 5,        // Sixth priority
+        "Did Not Pick Up": 6,       // Seventh priority
       };
       
       const sortedItems = (queueData.items || []).sort((a, b) => {
-        const priorityA = statusPriority[a.status] || 99;
-        const priorityB = statusPriority[b.status] || 99;
+        // Normalize status strings (trim whitespace)
+        const statusA = (a.status || "").trim();
+        const statusB = (b.status || "").trim();
+        
+        // Get priority (default to 99 for unknown statuses)
+        const priorityA = statusPriority[statusA] ?? 99;
+        const priorityB = statusPriority[statusB] ?? 99;
+        
+        // Sort by priority (lower number = higher priority = comes first)
         if (priorityA !== priorityB) {
           return priorityA - priorityB;
         }
         // If same priority, sort by followup_date (earlier first)
-        return new Date(a.followup_date).getTime() - new Date(b.followup_date).getTime();
+        const dateA = a.followup_date ? new Date(a.followup_date).getTime() : 0;
+        const dateB = b.followup_date ? new Date(b.followup_date).getTime() : 0;
+        return dateA - dateB;
       });
       
       setTodaysFollowups(sortedItems);

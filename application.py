@@ -1160,18 +1160,18 @@ def dashboard():
         if base_conditions:
             current_followups_query = current_followups_query.filter(*base_conditions)
         
-        # Add status ordering
+        # Add status ordering: New Lead > Feedback > Confirmed > Open > Completed > Needs Followup > Did not Pick up
         status_order = db.case(
-            (Lead.status == 'Confirmed', 1),
-            (Lead.status == 'Open', 2),
-            (Lead.status == 'Completed', 3),
-            (Lead.status == 'Feedback', 4),
+            (Lead.status == 'New Lead', 0),
+            (Lead.status == 'Feedback', 1),
+            (Lead.status == 'Confirmed', 2),
+            (Lead.status == 'Open', 3),
+            (Lead.status == 'Completed', 4),
             (Lead.status == 'Needs Followup', 5),
-            (Lead.status == 'New Lead', 6),
-            (Lead.status == 'Did Not Pick Up', 7),
-            else_=8
+            (Lead.status == 'Did Not Pick Up', 6),
+            else_=7
         )
-        current_followups = current_followups_query.order_by(status_order, Lead.followup_date.asc()).all()
+        current_followups = current_followups_query.order_by(status_order.asc(), Lead.followup_date.asc()).all()
         
         # Convert followups to IST for display
         for followup in current_followups:
@@ -2414,13 +2414,61 @@ def api_admin_team_members():
         print(f"Error in api_admin_team_members: {e}")
         return jsonify({'error': str(e)}), 500
 
-@application.route('/api/admin/users', methods=['GET'])
+@application.route('/api/admin/users', methods=['GET', 'POST'])
 @login_required
 def get_all_users():
-    """Get all users (admin only)"""
+    """Get all users or create a new user (admin only)"""
     if not current_user.is_admin:
         return jsonify({'error': 'Admin access required'}), 403
     
+    if request.method == 'POST':
+        # Create new user
+        try:
+            data = request.get_json()
+            username = data.get('username')
+            name = data.get('name')
+            password = data.get('password')
+            is_admin = data.get('is_admin', False)
+            
+            # Validation
+            if not username or not name or not password:
+                return jsonify({'error': 'Username, name, and password are required'}), 400
+            
+            if len(password) < 6:
+                return jsonify({'error': 'Password must be at least 6 characters long'}), 400
+            
+            # Check if username already exists
+            existing_user = User.query.filter_by(username=username).first()
+            if existing_user:
+                return jsonify({'error': 'Username already exists'}), 400
+            
+            # Create new user
+            new_user = User(
+                username=username,
+                name=name,
+                is_admin=bool(is_admin)
+            )
+            new_user.set_password(password)
+            db.session.add(new_user)
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': f'User {username} created successfully',
+                'user': {
+                    'id': new_user.id,
+                    'username': new_user.username,
+                    'name': new_user.name,
+                    'is_admin': new_user.is_admin
+                }
+            }), 201
+            
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error creating user: {e}")
+            return jsonify({'error': 'Failed to create user'}), 500
+    
+    # GET request - return all users
     try:
         # Get all users
         all_users = User.query.order_by(User.id.asc()).all()

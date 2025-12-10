@@ -25,6 +25,14 @@ export default function PasswordManagerPage() {
     newPassword: "",
     confirmPassword: "",
   });
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUserData, setNewUserData] = useState({
+    username: "",
+    name: "",
+    password: "",
+    confirmPassword: "",
+    is_admin: false,
+  });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -127,6 +135,79 @@ export default function PasswordManagerPage() {
     }
   }
 
+  function handleCancelAddUser() {
+    setShowAddUser(false);
+    setNewUserData({
+      username: "",
+      name: "",
+      password: "",
+      confirmPassword: "",
+      is_admin: false,
+    });
+    setError("");
+    setSuccess("");
+  }
+
+  async function handleAddUser() {
+    setError("");
+    setSuccess("");
+
+    // Validation
+    if (!newUserData.username || !newUserData.name || !newUserData.password) {
+      setError("Username, name, and password are required");
+      return;
+    }
+
+    if (newUserData.password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return;
+    }
+
+    if (newUserData.password !== newUserData.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/users`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: newUserData.username,
+          name: newUserData.name,
+          password: newUserData.password,
+          is_admin: newUserData.is_admin,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setSuccess(data.message || "User created successfully!");
+        setShowAddUser(false);
+        setNewUserData({
+          username: "",
+          name: "",
+          password: "",
+          confirmPassword: "",
+          is_admin: false,
+        });
+        // Reload users after a short delay
+        setTimeout(() => {
+          loadUsers();
+        }, 1000);
+      } else {
+        const data = await res.json();
+        setError(data.error || data.message || "Failed to create user");
+      }
+    } catch (err) {
+      console.error("Error creating user:", err);
+      setError("Error creating user. Please try again.");
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
@@ -164,11 +245,125 @@ export default function PasswordManagerPage() {
         )}
 
         <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-          <div className="p-4 border-b border-zinc-200">
+          <div className="p-4 border-b border-zinc-200 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-zinc-900">
               All Users ({users.length})
             </h2>
+            <button
+              onClick={() => {
+                setShowAddUser(!showAddUser);
+                setError("");
+                setSuccess("");
+                if (showAddUser) {
+                  handleCancelAddUser();
+                }
+              }}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition"
+            >
+              {showAddUser ? "Cancel" : "Add User"}
+            </button>
           </div>
+
+          {showAddUser && (
+            <div className="p-4 border-b border-zinc-200 bg-zinc-50">
+              <h3 className="text-md font-semibold text-zinc-900 mb-3">
+                Add New User
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">
+                    Username *
+                  </label>
+                  <input
+                    type="text"
+                    value={newUserData.username}
+                    onChange={(e) =>
+                      setNewUserData({ ...newUserData, username: e.target.value })
+                    }
+                    placeholder="Enter username"
+                    className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newUserData.name}
+                    onChange={(e) =>
+                      setNewUserData({ ...newUserData, name: e.target.value })
+                    }
+                    placeholder="Enter full name"
+                    className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">
+                    Password *
+                  </label>
+                  <input
+                    type="password"
+                    value={newUserData.password}
+                    onChange={(e) =>
+                      setNewUserData({ ...newUserData, password: e.target.value })
+                    }
+                    placeholder="Enter password (min 6 characters)"
+                    className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">
+                    Confirm Password *
+                  </label>
+                  <input
+                    type="password"
+                    value={newUserData.confirmPassword}
+                    onChange={(e) =>
+                      setNewUserData({
+                        ...newUserData,
+                        confirmPassword: e.target.value,
+                      })
+                    }
+                    placeholder="Confirm password"
+                    className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={newUserData.is_admin}
+                      onChange={(e) =>
+                        setNewUserData({
+                          ...newUserData,
+                          is_admin: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 text-zinc-900 border-zinc-300 rounded focus:ring-zinc-900"
+                    />
+                    <span className="text-sm text-zinc-700">
+                      Admin privileges
+                    </span>
+                  </label>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={handleAddUser}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition"
+                >
+                  Create User
+                </button>
+                <button
+                  onClick={handleCancelAddUser}
+                  className="px-4 py-2 border border-zinc-300 rounded-lg text-sm font-medium text-zinc-700 hover:bg-zinc-100 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
