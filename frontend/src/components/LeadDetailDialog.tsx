@@ -11,6 +11,7 @@ const API_BASE =
   "http://localhost:5000";
 
 const STATUS_OPTIONS: LeadStatus[] = [
+  "New Lead",
   "Needs Followup",
   "Did Not Pick Up",
   "Confirmed",
@@ -39,6 +40,7 @@ export default function LeadDetailDialog({
     customer_name: "",
     mobile: "",
     car_registration: "",
+    car_model: "",
     followup_date: "",
     status: "Needs Followup" as LeadStatus,
     remarks: "",
@@ -67,6 +69,7 @@ export default function LeadDetailDialog({
         customer_name: lead.customer_name || "",
         mobile: lead.mobile || "",
         car_registration: lead.car_registration || "",
+        car_model: (lead as any).car_model || "",
         followup_date: followupDate,
         status: lead.status || "Needs Followup",
         remarks: lead.remarks || "",
@@ -82,17 +85,10 @@ export default function LeadDetailDialog({
     
     setSaving(true);
     try {
-      // Convert followup_date from IST to UTC ISO format
-      // The date input gives us a date in IST, we need to send it as UTC
-      let followupDateTime = null;
-      if (formData.followup_date) {
-        // Create date at midnight IST, then convert to UTC
-        // Format: YYYY-MM-DD -> create Date object assuming IST, then convert to ISO
-        const [year, month, day] = formData.followup_date.split("-");
-        // Create date in IST (Asia/Kolkata timezone)
-        const istDate = new Date(`${year}-${month}-${day}T00:00:00+05:30`);
-        followupDateTime = istDate.toISOString();
-      }
+      // Convert followup_date from YYYY-MM-DD to UTC ISO format
+      // We need to ensure the date stays exactly as the user selected it
+      // Send the date as a string in YYYY-MM-DD format to avoid timezone conversion issues
+      let followupDateTime = formData.followup_date || null;
 
       const res = await fetch(`${API_BASE}/api/followups/${lead.id}`, {
         method: "PATCH",
@@ -104,6 +100,7 @@ export default function LeadDetailDialog({
           customer_name: formData.customer_name,
           mobile: formData.mobile,
           car_registration: formData.car_registration,
+          car_model: formData.car_model,
           followup_date: followupDateTime,
           status: formData.status,
           remarks: formData.remarks,
@@ -196,7 +193,9 @@ export default function LeadDetailDialog({
                   onChange={(e) =>
                     setFormData({ ...formData, mobile: e.target.value })
                   }
+                  pattern="(\+91[0-9]{10}|[0-9]{10}|91[0-9]{10})"
                   className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
+                  placeholder="+917404625111, 7404625111, or 917404625111"
                 />
               </div>
               <div>
@@ -210,6 +209,20 @@ export default function LeadDetailDialog({
                     setFormData({ ...formData, car_registration: e.target.value })
                   }
                   className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
+                  Car Model
+                </label>
+                <input
+                  type="text"
+                  value={formData.car_model}
+                  onChange={(e) =>
+                    setFormData({ ...formData, car_model: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
+                  placeholder="e.g., Maruti Celerio, Hyundai i20"
                 />
               </div>
               <div>
@@ -286,6 +299,12 @@ export default function LeadDetailDialog({
                   <p className="text-xs text-zinc-500 mb-1">Car Registration</p>
                   <p className="text-sm font-medium text-zinc-900">
                     {lead.car_registration || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 mb-1">Car Model</p>
+                  <p className="text-sm font-medium text-zinc-900">
+                    {(lead as any).car_model || "—"}
                   </p>
                 </div>
                 <div>

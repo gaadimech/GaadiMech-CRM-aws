@@ -11,8 +11,7 @@ interface UnassignedLead {
   id: number;
   mobile: string;
   customer_name?: string;
-  car_manufacturer?: string;
-  car_model?: string;
+  car_model?: string; // Combined manufacturer and model
   pickup_type?: string;
   service_type?: string;
   scheduled_date?: string;
@@ -33,20 +32,37 @@ export default function AdminLeadsPage() {
   const [loading, setLoading] = useState(true);
   const [parseText, setParseText] = useState("");
   const [parseResult, setParseResult] = useState<any>(null);
-  const [formData, setFormData] = useState({
-    mobile: "",
-    customer_name: "",
-    car_manufacturer: "",
-    car_model: "",
-    pickup_type: "",
-    service_type: "",
-    scheduled_date: "",
-    source: "Website",
-    remarks: "",
-    assign_to: "",
+  const [formData, setFormData] = useState(() => {
+    // Set default scheduled_date to today
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
+    return {
+      mobile: "",
+      customer_name: "",
+      car_model: "", // Combined manufacturer and model
+      pickup_type: "",
+      service_type: "Express Car Service", // Default service type
+      scheduled_date: todayStr, // Default to today
+      source: "Website",
+      remarks: "", // Keep empty by default
+      assign_to: "",
+    };
   });
   const [search, setSearch] = useState("");
-  const [createdDate, setCreatedDate] = useState("");
+  const [createdDate, setCreatedDate] = useState(() => {
+    // Set default to today's date in YYYY-MM-DD format
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingLeadId, setDeletingLeadId] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -100,14 +116,33 @@ export default function AdminLeadsPage() {
         setParseResult(data.data);
         // Auto-fill form if parsing successful
         if (data.data && data.success) {
+          // Get today's date for default scheduled_date
+          const today = new Date();
+          const year = today.getFullYear();
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const day = String(today.getDate()).padStart(2, '0');
+          const todayStr = `${year}-${month}-${day}`;
+          
+          // Combine manufacturer and model into single car_model field
+          let combinedCarModel = "";
+          if (data.data.car_manufacturer && data.data.car_model) {
+            combinedCarModel = `${data.data.car_manufacturer} ${data.data.car_model}`;
+          } else if (data.data.car_manufacturer) {
+            combinedCarModel = data.data.car_manufacturer;
+          } else if (data.data.car_model) {
+            combinedCarModel = data.data.car_model;
+          }
+          
           setFormData((prev) => ({
             ...prev,
             mobile: data.data.mobile || prev.mobile,
             customer_name: data.data.customer_name || prev.customer_name,
-            car_manufacturer: data.data.car_manufacturer || prev.car_manufacturer,
-            car_model: data.data.car_model || prev.car_model,
-            service_type: data.data.service_type || prev.service_type,
-            remarks: data.data.remarks || prev.remarks,
+            car_model: combinedCarModel || prev.car_model,
+            service_type: data.data.service_type || "Express Car Service", // Default to Express Car Service if not parsed
+            pickup_type: data.data.pickup_type || prev.pickup_type,
+            scheduled_date: todayStr, // Always use today's date, ignore parsed date
+            source: data.data.source || prev.source,
+            remarks: "", // Keep remarks empty by default
           }));
         }
       }
@@ -123,6 +158,9 @@ export default function AdminLeadsPage() {
       return;
     }
 
+    setSubmitting(true);
+    const startTime = Date.now();
+    
     try {
       const formDataToSend = new URLSearchParams();
       Object.entries(formData).forEach(([key, value]) => {
@@ -138,27 +176,71 @@ export default function AdminLeadsPage() {
         body: formDataToSend.toString(),
       });
 
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      console.log(`Lead assignment took ${duration}ms`);
+
       if (res.ok) {
         alert("Lead added and assigned successfully!");
+        // Reset form with defaults
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const todayStr = `${year}-${month}-${day}`;
+        
         setFormData({
           mobile: "",
           customer_name: "",
-          car_manufacturer: "",
           car_model: "",
           pickup_type: "",
-          service_type: "",
-          scheduled_date: "",
+          service_type: "Express Car Service",
+          scheduled_date: todayStr,
           source: "Website",
           remarks: "",
           assign_to: "",
         });
         loadData();
       } else {
-        alert("Failed to add lead");
+        const errorText = await res.text();
+        alert(`Failed to add lead: ${errorText || 'Unknown error'}`);
       }
     } catch (err) {
       console.error("Failed to add lead:", err);
-      alert("Error adding lead");
+      alert("Error adding lead. Please check your connection and try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteLead(leadId: number) {
+    if (!confirm("Are you sure you want to delete this lead? This will also remove all assignments to team members.")) {
+      return;
+    }
+
+    setDeletingLeadId(leadId);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/unassigned-leads/${leadId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        // Remove from local state immediately for better UX
+        setUnassignedLeads((prev) => prev.filter((lead) => lead.id !== leadId));
+        alert("Lead deleted successfully!");
+      } else {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        alert(`Failed to delete lead: ${errorData.error || "Unknown error"}`);
+        // Reload data to sync with server
+        loadData();
+      }
+    } catch (err) {
+      console.error("Failed to delete lead:", err);
+      alert("Error deleting lead. Please try again.");
+      loadData();
+    } finally {
+      setDeletingLeadId(null);
     }
   }
 
@@ -219,9 +301,9 @@ export default function AdminLeadsPage() {
                       setFormData((prev) => ({ ...prev, mobile: e.target.value }))
                     }
                     required
-                    pattern="[0-9]{10,12}"
+                    pattern="(\+91[0-9]{10}|[0-9]{10}|91[0-9]{10})"
                     className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                    placeholder="Enter 10 or 12 digit mobile number"
+                    placeholder="Enter mobile: +917404625111, 7404625111, or 917404625111"
                   />
                 </div>
 
@@ -240,38 +322,22 @@ export default function AdminLeadsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-700 mb-1">
-                      Car Manufacturer
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.car_manufacturer}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          car_manufacturer: e.target.value,
-                        }))
-                      }
-                      className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                      placeholder="e.g., Maruti, Hyundai"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-700 mb-1">
-                      Car Model
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.car_model}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, car_model: e.target.value }))
-                      }
-                      className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                      placeholder="e.g., Swift, i20"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">
+                    Car Model
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.car_model}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, car_model: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                    placeholder="e.g., Maruti Celerio, Hyundai i20, Honda City"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Optional: Enter car manufacturer and model together
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -392,9 +458,10 @@ export default function AdminLeadsPage() {
 
                 <button
                   type="submit"
-                  className="w-full bg-zinc-900 text-white py-2.5 rounded-lg font-medium hover:bg-zinc-800 transition"
+                  disabled={submitting}
+                  className="w-full bg-zinc-900 text-white py-2.5 rounded-lg font-medium hover:bg-zinc-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  + Add Lead
+                  {submitting ? "Assigning Lead..." : "+ Add Lead"}
                 </button>
               </form>
             </div>
@@ -439,7 +506,7 @@ export default function AdminLeadsPage() {
                         </p>
                         <p className="text-sm text-zinc-600">{lead.mobile}</p>
                         <p className="text-xs text-zinc-500">
-                          {lead.car_manufacturer} {lead.car_model} • {lead.service_type}
+                          {lead.car_model || 'No car info'} • {lead.service_type}
                         </p>
                         {lead.assigned_to && (
                           <p className="text-xs text-blue-600 mt-1">
@@ -447,12 +514,21 @@ export default function AdminLeadsPage() {
                           </p>
                         )}
                       </div>
-                      <a
-                        href={`tel:${lead.mobile}`}
-                        className="px-3 py-1.5 bg-black text-white text-xs rounded-lg hover:bg-zinc-800"
-                      >
-                        Call
-                      </a>
+                      <div className="flex gap-2">
+                        <a
+                          href={`tel:${lead.mobile}`}
+                          className="px-3 py-1.5 bg-black text-white text-xs rounded-lg hover:bg-zinc-800 whitespace-nowrap"
+                        >
+                          Call
+                        </a>
+                        <button
+                          onClick={() => handleDeleteLead(lead.id)}
+                          disabled={deletingLeadId === lead.id}
+                          className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                        >
+                          {deletingLeadId === lead.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

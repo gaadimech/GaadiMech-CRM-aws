@@ -10,6 +10,7 @@ const API_BASE =
   "http://localhost:5000";
 
 const STATUS_OPTIONS: LeadStatus[] = [
+  "New Lead",
   "Needs Followup",
   "Did Not Pick Up",
   "Confirmed",
@@ -24,8 +25,9 @@ export default function AddLeadPage() {
     customer_name: "",
     mobile: "",
     car_registration: "",
+    car_model: "",
     followup_date: new Date().toISOString().split("T")[0],
-    status: "Needs Followup" as LeadStatus,
+    status: "New Lead" as LeadStatus,
     remarks: "",
   });
   const [loading, setLoading] = useState(false);
@@ -50,6 +52,7 @@ export default function AddLeadPage() {
       formDataToSend.append("customer_name", formData.customer_name);
       formDataToSend.append("mobile", formData.mobile);
       formDataToSend.append("car_registration", formData.car_registration);
+      formDataToSend.append("car_model", formData.car_model);
       formDataToSend.append("followup_date", formData.followup_date);
       formDataToSend.append("status", formData.status);
       formDataToSend.append("remarks", formData.remarks);
@@ -123,12 +126,12 @@ export default function AddLeadPage() {
                 value={formData.mobile}
                 onChange={handleChange}
                 required
-                pattern="[0-9]{10,12}"
+                pattern="(\+91[0-9]{10}|[0-9]{10}|91[0-9]{10})"
                 className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                placeholder="Enter 10 or 12 digits only (no + required)"
+                placeholder="Enter mobile: +917404625111, 7404625111, or 917404625111"
               />
               <p className="mt-1 text-xs text-zinc-500">
-                Enter 10 or 12 digits only (no + required)
+                Enter mobile number
               </p>
             </div>
 
@@ -150,6 +153,27 @@ export default function AddLeadPage() {
               />
               <p className="mt-1 text-xs text-zinc-500">
                 Optional: Enter vehicle registration number
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="car_model"
+                className="block text-sm font-medium text-zinc-700 mb-1"
+              >
+                Car Model
+              </label>
+              <input
+                id="car_model"
+                name="car_model"
+                type="text"
+                value={formData.car_model}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                placeholder="e.g., Maruti Celerio, Hyundai i20, Honda City"
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                Optional: Enter car manufacturer and model
               </p>
             </div>
 

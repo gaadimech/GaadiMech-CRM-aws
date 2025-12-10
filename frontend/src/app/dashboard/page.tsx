@@ -133,14 +133,15 @@ export default function DashboardPage() {
       });
       
       // Sort by status priority (most important first)
-      // Priority order: Confirmed > Feedback > Open > Completed > Needs Followup > Did Not Pick Up
+      // Priority order: Confirmed > Feedback > Open > Completed > Needs Followup > New Lead > Did Not Pick Up
       const statusPriority: Record<string, number> = {
         "Confirmed": 1,             // First priority
         "Feedback": 2,              // Second priority
         "Open": 3,                  // Third priority
         "Completed": 4,             // Fourth priority
         "Needs Followup": 5,        // Fifth priority
-        "Did Not Pick Up": 6,       // Sixth priority
+        "New Lead": 6,              // Sixth priority
+        "Did Not Pick Up": 7,       // Seventh priority
       };
       
       const sortedItems = (queueData.items || []).sort((a, b) => {

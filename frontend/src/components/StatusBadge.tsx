@@ -1,6 +1,7 @@
 import type { LeadStatus } from "../lib/types";
 
 const statusColors: Record<LeadStatus, string> = {
+  "New Lead": "bg-purple-100 text-purple-800",
   "Needs Followup": "bg-yellow-100 text-yellow-800",
   "Did Not Pick Up": "bg-red-100 text-red-800",
   "Confirmed": "bg-green-100 text-green-800",

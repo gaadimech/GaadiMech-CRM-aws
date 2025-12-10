@@ -4,13 +4,15 @@ export type LeadStatus =
   | "Confirmed"
   | "Open"
   | "Completed"
-  | "Feedback";
+  | "Feedback"
+  | "New Lead";
 
 export interface Lead {
   id: number;
   customer_name: string;
   mobile: string;
   car_registration?: string | null;
+  car_model?: string | null;
   followup_date: string; // ISO string in UTC
   status: LeadStatus;
   remarks?: string | null;

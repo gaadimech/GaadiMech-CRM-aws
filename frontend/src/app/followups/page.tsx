@@ -14,6 +14,7 @@ const API_BASE =
 
 const STATUS_OPTIONS: LeadStatus[] = [
   "All Status",
+  "New Lead",
   "Needs Followup",
   "Did Not Pick Up",
   "Confirmed",

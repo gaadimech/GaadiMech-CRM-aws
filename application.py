@@ -120,6 +120,37 @@ except Exception as e:
 # Timezone
 ist = timezone('Asia/Kolkata')
 
+def normalize_mobile_number(mobile):
+    """
+    Normalize mobile number to accept three formats:
+    1. +91XXXXXXXXXX (13 characters: +91 + 10 digits)
+    2. XXXXXXXXXX (10 digits)
+    3. 91XXXXXXXXXX (12 digits: 91 + 10 digits)
+    
+    Returns normalized mobile number (10 digits) or None if invalid
+    """
+    if not mobile:
+        return None
+    
+    # Remove all non-digit characters except +
+    cleaned = re.sub(r'[^\d+]', '', mobile)
+    
+    # Handle +91 format
+    if cleaned.startswith('+91'):
+        digits = cleaned[3:]  # Remove +91
+        if len(digits) == 10 and digits[0] in ['6', '7', '8', '9']:
+            return digits
+    # Handle 91XXXXXXXXXX format
+    elif cleaned.startswith('91'):
+        digits = cleaned[2:]  # Remove 91
+        if len(digits) == 10 and digits[0] in ['6', '7', '8', '9']:
+            return digits
+    # Handle XXXXXXXXXX format (10 digits)
+    elif len(cleaned) == 10 and cleaned[0] in ['6', '7', '8', '9']:
+        return cleaned
+    
+    return None
+
 # Mobile mapping
 USER_MOBILE_MAPPING = {
     'Hemlata': '9672562111',
@@ -158,6 +189,7 @@ class Lead(db.Model):
     customer_name = db.Column(db.String(100), nullable=False)
     mobile = db.Column(db.String(15), nullable=False)
     car_registration = db.Column(db.String(20), nullable=True)
+    car_model = db.Column(db.String(100), nullable=True)
     followup_date = db.Column(db.DateTime, nullable=False)
     remarks = db.Column(db.Text)
     status = db.Column(db.String(20), nullable=False, default='Needs Followup')
@@ -167,7 +199,7 @@ class Lead(db.Model):
 
     __table_args__ = (
         db.CheckConstraint(
-            status.in_(['Did Not Pick Up', 'Needs Followup', 'Confirmed', 'Open', 'Completed', 'Feedback']),
+            status.in_(['New Lead', 'Did Not Pick Up', 'Needs Followup', 'Confirmed', 'Open', 'Completed', 'Feedback']),
             name='valid_status'
         ),
     )
@@ -723,29 +755,34 @@ def add_lead():
         customer_name = request.form.get('customer_name')
         mobile = request.form.get('mobile')
         car_registration = request.form.get('car_registration')
+        car_model = request.form.get('car_model')
         remarks = request.form.get('remarks')
         status = request.form.get('status')
 
-        if not status or status not in ['Did Not Pick Up', 'Needs Followup', 'Confirmed', 'Open', 'Completed', 'Feedback']:
-            status = 'Needs Followup'
+        if not status or status not in ['New Lead', 'Did Not Pick Up', 'Needs Followup', 'Confirmed', 'Open', 'Completed', 'Feedback']:
+            status = 'New Lead'
 
-        followup_date = datetime.strptime(request.form.get('followup_date'), '%Y-%m-%d')
-        followup_date = ist.localize(followup_date)
+        # Parse followup_date as YYYY-MM-DD and create at midnight IST, then convert to UTC
+        followup_date_str = request.form.get('followup_date')
+        followup_date_only = datetime.strptime(followup_date_str, '%Y-%m-%d').date()
+        followup_date = ist.localize(datetime.combine(followup_date_only, datetime.min.time())).astimezone(pytz.UTC)
 
         if not all([customer_name, mobile, followup_date]):
             flash('All required fields must be filled', 'error')
             return redirect(url_for('index'))
 
-        # Clean mobile number first
-        mobile = re.sub(r'[^\d]', '', mobile)
-        if len(mobile) not in [10, 12]:
-            flash('Mobile number must be 10 or 12 digits only', 'error')
+        # Normalize mobile number
+        normalized_mobile = normalize_mobile_number(mobile)
+        if not normalized_mobile:
+            flash('Invalid mobile number format. Please use: +917404625111, 7404625111, or 917404625111', 'error')
             return redirect(url_for('index'))
+        mobile = normalized_mobile
 
         new_lead = Lead(
             customer_name=customer_name,
             mobile=mobile,
             car_registration=car_registration,
+            car_model=car_model.strip() if car_model else None,
             followup_date=followup_date,
             remarks=remarks,
             status=status,
@@ -786,6 +823,7 @@ def edit_lead(lead_id):
             lead.customer_name = request.form.get('customer_name')
             lead.mobile = request.form.get('mobile')
             lead.car_registration = request.form.get('car_registration')
+            lead.car_model = request.form.get('car_model')
             lead.remarks = request.form.get('remarks')
             lead.status = request.form.get('status')
             
@@ -1129,8 +1167,9 @@ def dashboard():
             (Lead.status == 'Completed', 3),
             (Lead.status == 'Feedback', 4),
             (Lead.status == 'Needs Followup', 5),
-            (Lead.status == 'Did Not Pick Up', 6),
-            else_=7
+            (Lead.status == 'New Lead', 6),
+            (Lead.status == 'Did Not Pick Up', 7),
+            else_=8
         )
         current_followups = current_followups_query.order_by(status_order, Lead.followup_date.asc()).all()
         
@@ -1275,6 +1314,7 @@ def get_followup_details(lead_id):
             'customer_name': lead.customer_name,
             'mobile': lead.mobile,
             'car_registration': lead.car_registration,
+            'car_model': lead.car_model,
             'followup_date': followup_date.strftime('%Y-%m-%d') if followup_date else None,
             'status': lead.status,
             'remarks': lead.remarks
@@ -1388,8 +1428,20 @@ def api_followups_today():
         elif not current_user.is_admin:
             query = query.filter(Lead.creator_id == current_user.id)
         
-        # Get leads
-        leads = query.order_by(Lead.followup_date.asc()).all()
+        # Status priority order: New Lead > Feedback > Confirmed > Open > Completed > Needs Followup > Did Not Pick Up
+        status_order = db.case(
+            (Lead.status == 'New Lead', 0),
+            (Lead.status == 'Feedback', 1),
+            (Lead.status == 'Confirmed', 2),
+            (Lead.status == 'Open', 3),
+            (Lead.status == 'Completed', 4),
+            (Lead.status == 'Needs Followup', 5),
+            (Lead.status == 'Did Not Pick Up', 6),
+            else_=7
+        )
+        
+        # Get leads - order by status priority first, then by followup_date ascending
+        leads = query.order_by(status_order.asc(), Lead.followup_date.asc()).all()
         
         # Convert to JSON format
         items = []
@@ -1430,6 +1482,7 @@ def api_followups_today():
                 'customer_name': lead.customer_name,
                 'mobile': lead.mobile,
                 'car_registration': lead.car_registration or '',
+                'car_model': lead.car_model or '',
                 'followup_date': followup_date_iso,
                 'status': lead.status,
                 'remarks': lead.remarks or '',
@@ -1722,12 +1775,25 @@ def api_followups():
                     Lead.customer_name.ilike(f'%{search}%'),
                     Lead.mobile.ilike(f'%{search}%'),
                     Lead.car_registration.ilike(f'%{search}%'),
+                    Lead.car_model.ilike(f'%{search}%'),
                     Lead.remarks.ilike(f'%{search}%')
                 )
             )
         
-        # Paginate
-        pagination = query.order_by(Lead.followup_date.desc()).paginate(
+        # Status priority order: New Lead > Feedback > Confirmed > Open > Completed > Needs Followup > Did Not Pick Up
+        status_order = db.case(
+            (Lead.status == 'New Lead', 0),
+            (Lead.status == 'Feedback', 1),
+            (Lead.status == 'Confirmed', 2),
+            (Lead.status == 'Open', 3),
+            (Lead.status == 'Completed', 4),
+            (Lead.status == 'Needs Followup', 5),
+            (Lead.status == 'Did Not Pick Up', 6),
+            else_=7
+        )
+        
+        # Paginate - order by status priority first, then by followup_date ascending (earliest first)
+        pagination = query.order_by(status_order.asc(), Lead.followup_date.asc()).paginate(
             page=page, per_page=per_page, error_out=False
         )
         
@@ -1751,6 +1817,7 @@ def api_followups():
                 'customer_name': lead.customer_name,
                 'mobile': lead.mobile,
                 'car_registration': lead.car_registration or '',
+                'car_model': lead.car_model or '',
                 'followup_date': followup_date_iso,
                 'status': lead.status,
                 'remarks': lead.remarks or '',
@@ -1789,32 +1856,39 @@ def api_update_followup(lead_id):
         if 'customer_name' in data:
             lead.customer_name = data['customer_name']
         if 'mobile' in data:
-            lead.mobile = data['mobile']
+            normalized_mobile = normalize_mobile_number(data['mobile'])
+            if not normalized_mobile:
+                return jsonify({'error': 'Invalid mobile number format. Please use: +917404625111, 7404625111, or 917404625111'}), 400
+            lead.mobile = normalized_mobile
         if 'car_registration' in data:
             lead.car_registration = data['car_registration']
+        if 'car_model' in data:
+            lead.car_model = data['car_model'].strip() if data['car_model'] else None
         if 'status' in data:
             lead.status = data['status']
         if 'remarks' in data:
             lead.remarks = data['remarks']
         if 'followup_date' in data and data['followup_date']:
-            # Parse ISO date string (should be in UTC from frontend)
-            # Frontend sends UTC ISO, we need to interpret it as IST date and convert to UTC
+            # Parse date string - frontend now sends YYYY-MM-DD format to avoid timezone issues
             try:
-                followup_dt = datetime.fromisoformat(data['followup_date'].replace('Z', '+00:00'))
-                # Get the date part (assuming it represents IST date)
-                followup_date_only = followup_dt.date()
-                # Create datetime at midnight IST, then convert to UTC
+                # Try parsing as YYYY-MM-DD first (preferred format)
+                if isinstance(data['followup_date'], str) and len(data['followup_date']) == 10 and data['followup_date'].count('-') == 2:
+                    followup_date_only = datetime.strptime(data['followup_date'], '%Y-%m-%d').date()
+                else:
+                    # Fallback: try parsing ISO format
+                    followup_dt = datetime.fromisoformat(data['followup_date'].replace('Z', '+00:00'))
+                    followup_date_only = followup_dt.date()
+                
+                # Create datetime at midnight IST for the selected date, then convert to UTC
                 followup_start = ist.localize(datetime.combine(followup_date_only, datetime.min.time()))
-                lead.followup_date = followup_start.astimezone(pytz.UTC)
+                new_followup_date = followup_start.astimezone(pytz.UTC)
+                
+                # Always update to ensure the date is exactly as the user selected
+                lead.followup_date = new_followup_date
             except (ValueError, AttributeError) as e:
                 print(f"Error parsing followup_date: {e}")
-                # Try alternative: assume YYYY-MM-DD format
-                try:
-                    followup_date_only = datetime.strptime(data['followup_date'], '%Y-%m-%d').date()
-                    followup_start = ist.localize(datetime.combine(followup_date_only, datetime.min.time()))
-                    lead.followup_date = followup_start.astimezone(pytz.UTC)
-                except ValueError:
-                    pass
+                # If parsing fails, don't update the date to avoid breaking existing data
+                pass
         
         lead.modified_at = datetime.now(ist)
         db.session.commit()
@@ -2174,6 +2248,31 @@ def followups():
 
 # Admin API endpoints for new TypeScript frontend
 
+@application.route('/api/admin/unassigned-leads/<int:lead_id>', methods=['DELETE'])
+@login_required
+def api_delete_unassigned_lead(lead_id):
+    """Delete an unassigned lead and all its assignments"""
+    try:
+        if not current_user.is_admin:
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        # Get the unassigned lead
+        lead = UnassignedLead.query.get_or_404(lead_id)
+        
+        # Delete all team assignments for this lead first (cascade)
+        TeamAssignment.query.filter_by(unassigned_lead_id=lead_id).delete()
+        
+        # Delete the lead
+        db.session.delete(lead)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Lead and all assignments deleted successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting unassigned lead: {str(e)}")
+        return jsonify({'error': f'Error deleting lead: {str(e)}'}), 500
+
 @application.route('/api/admin/unassigned-leads', methods=['GET'])
 @login_required
 def api_admin_unassigned_leads():
@@ -2230,12 +2329,20 @@ def api_admin_unassigned_leads():
                 assigned_user = User.query.get(current_assignment.assigned_to_user_id)
                 assigned_to = assigned_user.name if assigned_user else None
             
+            # Combine manufacturer and model for display
+            combined_car_model = None
+            if lead.car_manufacturer and lead.car_model:
+                combined_car_model = f"{lead.car_manufacturer} {lead.car_model}"
+            elif lead.car_manufacturer:
+                combined_car_model = lead.car_manufacturer
+            elif lead.car_model:
+                combined_car_model = lead.car_model
+            
             leads.append({
                 'id': lead.id,
                 'mobile': lead.mobile,
                 'customer_name': lead.customer_name or '',
-                'car_manufacturer': lead.car_manufacturer or '',
-                'car_model': lead.car_model or '',
+                'car_model': combined_car_model or '',  # Combined manufacturer and model
                 'pickup_type': lead.pickup_type or '',
                 'service_type': lead.service_type or '',
                 'scheduled_date': lead.scheduled_date.isoformat() if lead.scheduled_date else None,
@@ -2287,8 +2394,7 @@ def admin_leads():
             # Handle form submission to add new unassigned lead
             mobile = request.form.get('mobile')
             customer_name = request.form.get('customer_name')
-            car_manufacturer = request.form.get('car_manufacturer')
-            car_model = request.form.get('car_model')
+            car_model = request.form.get('car_model')  # Combined manufacturer and model
             pickup_type = request.form.get('pickup_type')
             service_type = request.form.get('service_type')
             source = request.form.get('source')
@@ -2298,8 +2404,19 @@ def admin_leads():
             
             # Convert empty strings to None for database constraints
             customer_name = customer_name.strip() if customer_name else None
-            car_manufacturer = car_manufacturer.strip() if car_manufacturer else None
             car_model = car_model.strip() if car_model else None
+            # Split car_model into manufacturer and model for UnassignedLead table
+            car_manufacturer = None
+            car_model_split = None
+            if car_model:
+                # Try to split "Manufacturer Model" format
+                parts = car_model.split(' ', 1)
+                if len(parts) == 2:
+                    car_manufacturer = parts[0].strip()
+                    car_model_split = parts[1].strip()
+                else:
+                    # If only one word, assume it's the model
+                    car_model_split = car_model
             pickup_type = pickup_type.strip() if pickup_type else None
             service_type = service_type.strip() if service_type else None
             source = source.strip() if source else None
@@ -2310,11 +2427,12 @@ def admin_leads():
                 flash('Mobile number is required', 'error')
                 return redirect(url_for('admin_leads'))
             
-            # Clean mobile number
-            mobile = re.sub(r'[^\d]', '', mobile)
-            if len(mobile) not in [10, 12]:
-                flash('Mobile number must be 10 or 12 digits only', 'error')
+            # Normalize mobile number
+            normalized_mobile = normalize_mobile_number(mobile)
+            if not normalized_mobile:
+                flash('Invalid mobile number format. Please use: +917404625111, 7404625111, or 917404625111', 'error')
                 return redirect(url_for('admin_leads'))
+            mobile = normalized_mobile
             
             if not assign_to:
                 flash('Please select a team member to assign this lead', 'error')
@@ -2326,7 +2444,7 @@ def admin_leads():
                     mobile=mobile,
                     customer_name=customer_name,
                     car_manufacturer=car_manufacturer,
-                    car_model=car_model,
+                    car_model=car_model_split,
                     pickup_type=pickup_type,
                     service_type=service_type,
                     source=source,
@@ -2617,21 +2735,24 @@ def get_assignment_details(assignment_id):
         # Get the unassigned lead data
         unassigned_lead = assignment.unassigned_lead
         
-        # Prepare the combined remarks
-        combined_remarks = f"Added from team assignment. Original source: {unassigned_lead.source or 'Unknown'}. "
-        combined_remarks += f"Service: {unassigned_lead.service_type or 'Not specified'}. "
-        combined_remarks += f"Car: {unassigned_lead.car_manufacturer or ''} {unassigned_lead.car_model or ''}. "
-        combined_remarks += f"Pickup: {unassigned_lead.pickup_type or 'Not specified'}. "
-        combined_remarks += f"Original remarks: {unassigned_lead.remarks or 'None'}"
+        # Get car_model from unassigned_lead (combine manufacturer and model)
+        car_model = None
+        if unassigned_lead.car_manufacturer and unassigned_lead.car_model:
+            car_model = f"{unassigned_lead.car_manufacturer} {unassigned_lead.car_model}"
+        elif unassigned_lead.car_manufacturer:
+            car_model = unassigned_lead.car_manufacturer
+        elif unassigned_lead.car_model:
+            car_model = unassigned_lead.car_model
         
         return jsonify({
             'success': True,
             'customer_name': unassigned_lead.customer_name or 'Unknown Customer',
             'mobile': unassigned_lead.mobile,
             'car_registration': '',  # Default empty, user can edit
-            'followup_date': (datetime.now(ist) + timedelta(days=1)).strftime('%Y-%m-%d'),  # Default to tomorrow
-            'status': 'Needs Followup',
-            'remarks': combined_remarks
+            'car_model': car_model or '',  # Combined manufacturer and model
+            'followup_date': datetime.now(ist).date().strftime('%Y-%m-%d'),  # Default to today
+            'status': 'New Lead',
+            'remarks': ''  # Keep remarks empty by default
         })
         
     except Exception as e:
@@ -2646,8 +2767,9 @@ def add_to_crm_with_details(assignment_id):
         customer_name = data.get('customer_name')
         mobile = data.get('mobile')
         car_registration = data.get('car_registration', '')
+        car_model = data.get('car_model', '')
         followup_date = data.get('followup_date')
-        status = data.get('status', 'Needs Followup')
+        status = data.get('status', 'New Lead')
         remarks = data.get('remarks', '')
         
         # Get the assignment
@@ -2665,20 +2787,31 @@ def add_to_crm_with_details(assignment_id):
         if not customer_name or not mobile:
             return jsonify({'success': False, 'message': 'Customer Name and Mobile Number are required'})
         
-        # Clean mobile number
-        mobile = re.sub(r'[^\d]', '', mobile)
-        if len(mobile) not in [10, 12]:
-            return jsonify({'success': False, 'message': 'Mobile number must be 10 or 12 digits only'})
+        # Normalize mobile number
+        normalized_mobile = normalize_mobile_number(mobile)
+        if not normalized_mobile:
+            return jsonify({'success': False, 'message': 'Invalid mobile number format. Please use: +917404625111, 7404625111, or 917404625111'})
+        mobile = normalized_mobile
         
         # Parse followup date
         followup_datetime = datetime.strptime(followup_date, '%Y-%m-%d')
         followup_date_ist = ist.localize(followup_datetime)
+        
+        # Get car_model from unassigned_lead (combine manufacturer and model)
+        car_model = None
+        if unassigned_lead.car_manufacturer and unassigned_lead.car_model:
+            car_model = f"{unassigned_lead.car_manufacturer} {unassigned_lead.car_model}"
+        elif unassigned_lead.car_manufacturer:
+            car_model = unassigned_lead.car_manufacturer
+        elif unassigned_lead.car_model:
+            car_model = unassigned_lead.car_model
         
         # Create a new lead in the main CRM system
         new_lead = Lead(
             customer_name=customer_name,
             mobile=mobile,
             car_registration=car_registration,
+            car_model=car_model,
             followup_date=followup_date_ist,
             remarks=remarks,
             status=status,
@@ -2733,13 +2866,9 @@ def add_to_crm(assignment_id):
             customer_name=unassigned_lead.customer_name or 'Unknown Customer',
             mobile=unassigned_lead.mobile,
             car_registration='',  # Can be updated later
-            followup_date=datetime.now(ist) + timedelta(days=1),  # Default to tomorrow
-            remarks=f"Added from team assignment. Original source: {unassigned_lead.source or 'Unknown'}. "
-                   f"Service: {unassigned_lead.service_type or 'Not specified'}. "
-                   f"Car: {unassigned_lead.car_manufacturer or ''} {unassigned_lead.car_model or ''}. "
-                   f"Pickup: {unassigned_lead.pickup_type or 'Not specified'}. "
-                   f"Original remarks: {unassigned_lead.remarks or 'None'}",
-            status='Needs Followup',
+            followup_date=datetime.now(ist),  # Default to today
+            remarks='',  # Keep remarks empty by default
+            status='New Lead',
             creator_id=current_user.id,
             created_at=datetime.now(ist),
             modified_at=datetime.now(ist)
@@ -2992,6 +3121,7 @@ def calculate_lead_score(lead):
         'Confirmed': 40,
         'Needs Followup': 30,
         'Open': 25,
+        'New Lead': 20,
         'Did Not Pick Up': 15,
         'Completed': 5,
         'Feedback': 5

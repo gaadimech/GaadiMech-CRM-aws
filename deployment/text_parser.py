@@ -124,6 +124,9 @@ class CustomerInfoParser:
         # Extract source
         result['source'] = self._extract_source(text)
         
+        # Extract status
+        result['status'] = self._extract_status(text)
+        
         return result
     
     def _get_empty_result(self) -> Dict[str, Optional[str]]:
@@ -137,21 +140,26 @@ class CustomerInfoParser:
             'service_type': None,
             'scheduled_date': None,
             'source': None,
+            'status': None,
             'remarks': None
         }
     
     def _extract_mobile_number(self, text: str) -> Optional[str]:
         """Extract mobile number from text"""
-        # Common patterns for mobile numbers
+        # Common patterns for mobile numbers (including emoji patterns)
         patterns = [
-            r'\+91\s*[-\s]*(\d{5})\s*[-\s]*(\d{5})',  # +91 XXXXX XXXXX
-            r'\+91\s*[-\s]*(\d{10})',                  # +91 XXXXXXXXXX
-            r'91\s*[-\s]*(\d{10})',                    # 91 XXXXXXXXXX
-            r'(\d{5})\s*[-\s]*(\d{5})',                # XXXXX XXXXX
-            r'(\d{10})',                               # XXXXXXXXXX
-            r'\(\+91\s*(\d{10})\)',                    # (+91 XXXXXXXXXX)
-            r'\+91\s*(\d{5})\s*(\d{5})',               # +91 XXXXX XXXXX
-            r'91\s*(\d{5})\s*(\d{5})',                 # 91 XXXXX XXXXX
+            r'📱\s*Mobile\s*[:\-]?\s*\+?91\s*[-\s]*(\d{5})\s*[-\s]*(\d{5})',  # 📱 Mobile: +91 XXXXX XXXXX
+            r'📱\s*Mobile\s*[:\-]?\s*\+?91\s*[-\s]*(\d{10})',                  # 📱 Mobile: +91 XXXXXXXXXX
+            r'📱\s*Mobile\s*[:\-]?\s*(\d{5})\s*[-\s]*(\d{5})',                # 📱 Mobile: XXXXX XXXXX
+            r'📱\s*Mobile\s*[:\-]?\s*(\d{10})',                               # 📱 Mobile: XXXXXXXXXX
+            r'\+91\s*[-\s]*(\d{5})\s*[-\s]*(\d{5})',                          # +91 XXXXX XXXXX
+            r'\+91\s*[-\s]*(\d{10})',                                         # +91 XXXXXXXXXX
+            r'91\s*[-\s]*(\d{10})',                                           # 91 XXXXXXXXXX
+            r'(\d{5})\s*[-\s]*(\d{5})',                                       # XXXXX XXXXX
+            r'(\d{10})',                                                       # XXXXXXXXXX
+            r'\(\+91\s*(\d{10})\)',                                            # (+91 XXXXXXXXXX)
+            r'\+91\s*(\d{5})\s*(\d{5})',                                       # +91 XXXXX XXXXX
+            r'91\s*(\d{5})\s*(\d{5})',                                         # 91 XXXXX XXXXX
         ]
         
         for pattern in patterns:
@@ -178,14 +186,15 @@ class CustomerInfoParser:
     
     def _extract_customer_name(self, text: str) -> Optional[str]:
         """Extract customer name from text"""
-        # Look for patterns like "Name: John Doe" or "John Doe (+91..."
+        # Look for patterns like "Name: John Doe" or "John Doe (+91..." or emoji patterns
         patterns = [
-            r'([A-Za-z\s]+)\s*\(\+91',                    # Name (+91...)
-            r'([A-Za-z\s]+)\s*\(\+?91',                   # Name (+91... or 91...)
-            r'Customer\s*[:\-]?\s*([A-Za-z\s]+)',         # Customer: Name
-            r'Name\s*[:\-]?\s*([A-Za-z\s]+)',             # Name: John Doe
-            r'^([A-Za-z\s]+)\s*\(\+',                     # Name at start (+...)
-            r'^([A-Za-z\s]+)\s*\d',                       # Name at start followed by number
+            r'👤\s*Name\s*[:\-]?\s*([A-Za-z\s]+?)(?:\n|📱|$)',  # 👤 Name: John Doe
+            r'Name\s*[:\-]?\s*([A-Za-z\s]+?)(?:\n|📱|$)',       # Name: John Doe
+            r'([A-Za-z\s]+)\s*\(\+91',                          # Name (+91...)
+            r'([A-Za-z\s]+)\s*\(\+?91',                         # Name (+91... or 91...)
+            r'Customer\s*[:\-]?\s*([A-Za-z\s]+)',              # Customer: Name
+            r'^([A-Za-z\s]+)\s*\(\+',                           # Name at start (+...)
+            r'^([A-Za-z\s]+)\s*\d',                            # Name at start followed by number
         ]
         
         for pattern in patterns:
@@ -194,7 +203,7 @@ class CustomerInfoParser:
                 name = matches[0].strip()
                 # Filter out common non-name words
                 if (len(name) > 2 and 
-                    not any(word.lower() in name.lower() for word in ['car', 'service', 'manufacturer', 'model', 'city', 'fuel', 'type', 'date', 'time', 'slot', 'workshop', 'chosen', 'saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday']) and
+                    not any(word.lower() in name.lower() for word in ['car', 'service', 'manufacturer', 'model', 'city', 'fuel', 'type', 'date', 'time', 'slot', 'workshop', 'chosen', 'saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'enquiry', 'new', 'lead', 'mncapture', 'express', 'booking', 'completed']) and
                     not name.isdigit()):
                     return name.title()
         
@@ -205,6 +214,35 @@ class CustomerInfoParser:
         text_lower = text.lower()
         result = {'manufacturer': None, 'model': None}
         
+        # Look for "Car:" pattern (may contain both manufacturer and model)
+        car_pattern = r'🚗\s*Car\s*[:\-]?\s*([a-zA-Z0-9\s]+?)(?:\n|🔧|$)'
+        car_matches = re.findall(car_pattern, text, re.IGNORECASE)
+        if car_matches:
+            car_text = car_matches[0].strip()
+            # Try to split manufacturer and model
+            car_words = car_text.split()
+            if len(car_words) >= 2:
+                # First word might be manufacturer, rest is model
+                potential_mfg = car_words[0].lower()
+                for mfg in self.car_manufacturers.keys():
+                    if mfg in potential_mfg or potential_mfg in mfg:
+                        result['manufacturer'] = mfg.title()
+                        result['model'] = ' '.join(car_words[1:]).title()
+                        break
+                if not result['manufacturer']:
+                    # Try to find manufacturer in the text
+                    for mfg in self.car_manufacturers.keys():
+                        if mfg in car_text.lower():
+                            result['manufacturer'] = mfg.title()
+                            # Extract model (remove manufacturer name)
+                            model_text = car_text.lower().replace(mfg, '').strip()
+                            if model_text:
+                                result['model'] = model_text.title()
+                            break
+                    if not result['manufacturer']:
+                        # Just set as model if no manufacturer found
+                        result['model'] = car_text.title()
+        
         # Look for manufacturer patterns
         manufacturer_patterns = [
             r'car\s*manufacturer\s*[:\-]?\s*([a-zA-Z\s]+?)(?:\n|$)',
@@ -212,38 +250,41 @@ class CustomerInfoParser:
             r'make\s*[:\-]?\s*([a-zA-Z\s]+?)(?:\n|$)',
         ]
         
-        for pattern in manufacturer_patterns:
-            matches = re.findall(pattern, text_lower)
-            if matches:
-                manufacturer = matches[0].strip()
-                for mfg in self.car_manufacturers.keys():
-                    if mfg in manufacturer.lower():
-                        result['manufacturer'] = mfg.title()
+        if not result['manufacturer']:
+            for pattern in manufacturer_patterns:
+                matches = re.findall(pattern, text_lower)
+                if matches:
+                    manufacturer = matches[0].strip()
+                    for mfg in self.car_manufacturers.keys():
+                        if mfg in manufacturer.lower():
+                            result['manufacturer'] = mfg.title()
+                            break
+                    if result['manufacturer']:
                         break
-                if result['manufacturer']:
-                    break
         
-        # Look for model patterns
+        # Look for model patterns (including emoji pattern)
         model_patterns = [
+            r'🚗\s*Car\s*Model\s*[:\-]?\s*([a-zA-Z0-9\s]+?)(?:\n|📅|$)',
             r'car\s*model\s*[:\-]?\s*([a-zA-Z0-9\s]+?)(?:\n|$)',
             r'model\s*[:\-]?\s*([a-zA-Z0-9\s]+?)(?:\n|$)',
         ]
         
-        for pattern in model_patterns:
-            matches = re.findall(pattern, text_lower)
-            if matches:
-                model = matches[0].strip()
-                # Check if it's a valid model for the manufacturer
-                if result['manufacturer']:
-                    mfg_key = result['manufacturer'].lower()
-                    if mfg_key in self.car_manufacturers:
-                        for valid_model in self.car_manufacturers[mfg_key]:
-                            if valid_model.lower() in model.lower():
-                                result['model'] = valid_model.title()
-                                break
-                if not result['model']:
-                    result['model'] = model.strip().title()
-                break
+        if not result['model']:
+            for pattern in model_patterns:
+                matches = re.findall(pattern, text_lower)
+                if matches:
+                    model = matches[0].strip()
+                    # Check if it's a valid model for the manufacturer
+                    if result['manufacturer']:
+                        mfg_key = result['manufacturer'].lower()
+                        if mfg_key in self.car_manufacturers:
+                            for valid_model in self.car_manufacturers[mfg_key]:
+                                if valid_model.lower() in model.lower():
+                                    result['model'] = valid_model.title()
+                                    break
+                    if not result['model']:
+                        result['model'] = model.strip().title()
+                    break
         
         # If no explicit manufacturer found, try to infer from context
         if not result['manufacturer']:
@@ -251,10 +292,11 @@ class CustomerInfoParser:
                 if mfg in text_lower:
                     result['manufacturer'] = mfg.title()
                     # Try to find corresponding model
-                    for model in models:
-                        if model in text_lower:
-                            result['model'] = model.title()
-                            break
+                    if not result['model']:
+                        for model in models:
+                            if model in text_lower:
+                                result['model'] = model.title()
+                                break
                     break
         
         return result
@@ -263,8 +305,10 @@ class CustomerInfoParser:
         """Extract service type from text"""
         text_lower = text.lower()
         
-        # Look for service type patterns
+        # Look for service type patterns (including emoji patterns)
         service_patterns = [
+            r'🔧\s*Service\s*Type\s*[:\-]?\s*([a-zA-Z\s]+?)(?:\n|📅|$)',
+            r'🔧\s*Service\s*[:\-]?\s*([a-zA-Z\s]+?)(?:\n|📅|$)',
             r'service\s*type\s*[:\-]?\s*([a-zA-Z\s]+?)(?:\n|$)',
             r'service\s*[:\-]?\s*([a-zA-Z\s]+?)(?:\n|$)',
             r'type\s*[:\-]?\s*([a-zA-Z\s]+?)(?:\n|$)',
@@ -274,6 +318,9 @@ class CustomerInfoParser:
             matches = re.findall(pattern, text_lower)
             if matches:
                 service = matches[0].strip()
+                # Handle "Not specified" case
+                if 'not specified' in service:
+                    continue
                 for key, value in self.service_types.items():
                     if key in service:
                         return value
@@ -315,18 +362,23 @@ class CustomerInfoParser:
         """Extract scheduled date from text"""
         text_lower = text.lower()
         
-        # Look for date patterns
+        # Look for date patterns (including emoji patterns)
         date_patterns = [
-            r'service\s*date\s*[:\-]?\s*([a-zA-Z0-9\s,]+)',
-            r'scheduled\s*date\s*[:\-]?\s*([a-zA-Z0-9\s,]+)',
-            r'date\s*[:\-]?\s*([a-zA-Z0-9\s,]+)',
+            r'📅\s*Preferred\s*Date\s*[:\-]?\s*([a-zA-Z0-9\s,\-]+?)(?:\n|🔧|$)',
+            r'📅\s*Service\s*Date\s*[:\-]?\s*([a-zA-Z0-9\s,\-]+?)(?:\n|⏰|$)',
+            r'service\s*date\s*[:\-]?\s*([a-zA-Z0-9\s,\-]+)',
+            r'scheduled\s*date\s*[:\-]?\s*([a-zA-Z0-9\s,\-]+)',
+            r'preferred\s*date\s*[:\-]?\s*([a-zA-Z0-9\s,\-]+)',
+            r'date\s*[:\-]?\s*([a-zA-Z0-9\s,\-]+)',
         ]
         
         for pattern in date_patterns:
             matches = re.findall(pattern, text_lower)
             if matches:
                 date_str = matches[0].strip()
-                return self._parse_date_string(date_str)
+                parsed = self._parse_date_string(date_str)
+                if parsed:
+                    return parsed
         
         # Look for common date keywords
         if 'tomorrow' in text_lower:
@@ -395,6 +447,45 @@ class CustomerInfoParser:
         
         # If no explicit source found, try to infer from context
         for key, value in self.sources.items():
+            if key in text_lower:
+                return value
+        
+        return None
+    
+    def _extract_status(self, text: str) -> Optional[str]:
+        """Extract status from text"""
+        text_lower = text.lower()
+        
+        # Valid status values
+        valid_statuses = {
+            'new': 'New Lead',
+            'new lead': 'New Lead',
+            'needs followup': 'Needs Followup',
+            'needs follow up': 'Needs Followup',
+            'did not pick up': 'Did Not Pick Up',
+            'didn\'t pick up': 'Did Not Pick Up',
+            'confirmed': 'Confirmed',
+            'open': 'Open',
+            'completed': 'Completed',
+            'feedback': 'Feedback',
+        }
+        
+        # Look for status patterns (including emoji patterns)
+        status_patterns = [
+            r'📊\s*Status\s*[:\-]?\s*([a-zA-Z\s]+?)(?:\n|📅|$)',
+            r'status\s*[:\-]?\s*([a-zA-Z\s]+?)(?:\n|$)',
+        ]
+        
+        for pattern in status_patterns:
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                status_text = matches[0].strip()
+                for key, value in valid_statuses.items():
+                    if key in status_text:
+                        return value
+        
+        # If no explicit status found, try to infer from context
+        for key, value in valid_statuses.items():
             if key in text_lower:
                 return value
         
