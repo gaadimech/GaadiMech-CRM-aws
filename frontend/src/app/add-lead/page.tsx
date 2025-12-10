@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LeadStatus } from "../../lib/types";
+import VoiceInputButton from "../../components/VoiceInputButton";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
@@ -145,7 +146,7 @@ export default function AddLeadPage() {
                 value={formData.car_registration}
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                placeholder="E.G., MH12AB1234"
+                placeholder="Type your vehicle registration number"
               />
               <p className="mt-1 text-xs text-zinc-500">
                 Optional: Enter vehicle registration number
@@ -194,12 +195,21 @@ export default function AddLeadPage() {
             </div>
 
             <div>
-              <label
-                htmlFor="remarks"
-                className="block text-sm font-medium text-zinc-700 mb-1"
-              >
-                Remarks
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label
+                  htmlFor="remarks"
+                  className="block text-sm font-medium text-zinc-700"
+                >
+                  Remarks
+                </label>
+                <VoiceInputButton
+                  onTranscript={(text) =>
+                    setFormData((prev) => ({ ...prev, remarks: text }))
+                  }
+                  currentValue={formData.remarks}
+                  size="md"
+                />
+              </div>
               <textarea
                 id="remarks"
                 name="remarks"
@@ -207,7 +217,7 @@ export default function AddLeadPage() {
                 onChange={handleChange}
                 rows={4}
                 className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                placeholder="Add any additional notes or comments..."
+                placeholder="Add any additional notes or comments... (Click mic icon to use voice input)"
               />
             </div>
 

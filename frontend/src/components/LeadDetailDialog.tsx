@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import type { Lead, LeadStatus } from "../lib/types";
 import StatusBadge from "./StatusBadge";
 import { formatDateIST, formatDateTimeIST } from "../lib/dateUtils";
+import VoiceInputButton from "./VoiceInputButton";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
@@ -243,9 +244,18 @@ export default function LeadDetailDialog({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Remarks
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-zinc-700">
+                    Remarks
+                  </label>
+                  <VoiceInputButton
+                    onTranscript={(text) =>
+                      setFormData({ ...formData, remarks: text })
+                    }
+                    currentValue={formData.remarks}
+                    size="sm"
+                  />
+                </div>
                 <textarea
                   value={formData.remarks}
                   onChange={(e) =>
@@ -253,6 +263,7 @@ export default function LeadDetailDialog({
                   }
                   rows={4}
                   className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
+                  placeholder="Click mic icon to use voice input"
                 />
               </div>
             </>

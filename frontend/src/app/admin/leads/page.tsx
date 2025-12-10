@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import VoiceInputButton from "../../../components/VoiceInputButton";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
@@ -345,9 +346,18 @@ export default function AdminLeadsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 mb-1">
-                    Remarks
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-zinc-700">
+                      Remarks
+                    </label>
+                    <VoiceInputButton
+                      onTranscript={(text) =>
+                        setFormData((prev) => ({ ...prev, remarks: text }))
+                      }
+                      currentValue={formData.remarks}
+                      size="sm"
+                    />
+                  </div>
                   <textarea
                     value={formData.remarks}
                     onChange={(e) =>
@@ -355,7 +365,7 @@ export default function AdminLeadsPage() {
                     }
                     rows={3}
                     className="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
-                    placeholder="Add any additional notes or remarks"
+                    placeholder="Add any additional notes or remarks (Click mic icon to use voice input)"
                   />
                 </div>
 
