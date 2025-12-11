@@ -2557,6 +2557,478 @@ def update_user_password(user_id):
         print(f"Error updating password: {e}")
         return jsonify({'error': 'Failed to update password'}), 500
 
+@application.route('/api/admin/leads-manipulation/search', methods=['GET'])
+@login_required
+def api_admin_leads_manipulation_search():
+    """Search and filter leads for manipulation (admin only)"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        # Get query parameters
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        user_id = request.args.get('user_id', '')
+        status = request.args.get('status', '')
+        search = request.args.get('search', '')
+        
+        # Start with base query
+        query = Lead.query
+        
+        # Apply date range filter
+        if date_from:
+            try:
+                target_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+                target_start = ist.localize(datetime.combine(target_date, datetime.min.time()))
+                target_start_utc = target_start.astimezone(pytz.UTC)
+                query = query.filter(Lead.followup_date >= target_start_utc)
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                target_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+                target_end = ist.localize(datetime.combine(target_date, datetime.max.time()))
+                target_end_utc = target_end.astimezone(pytz.UTC)
+                query = query.filter(Lead.followup_date <= target_end_utc)
+            except ValueError:
+                pass
+        
+        # Apply user filter
+        if user_id:
+            try:
+                query = query.filter(Lead.creator_id == int(user_id))
+            except ValueError:
+                pass
+        
+        # Apply status filter
+        if status:
+            query = query.filter(Lead.status == status)
+        
+        # Apply search filter
+        if search:
+            query = query.filter(
+                db.or_(
+                    Lead.customer_name.ilike(f'%{search}%'),
+                    Lead.mobile.ilike(f'%{search}%'),
+                    Lead.car_registration.ilike(f'%{search}%'),
+                    Lead.car_model.ilike(f'%{search}%'),
+                    Lead.remarks.ilike(f'%{search}%')
+                )
+            )
+        
+        # Order by followup_date ascending - no limit for admin operations
+        # Use yield_per for better memory efficiency with large datasets
+        leads_list = query.order_by(Lead.followup_date.asc())
+        
+        # Get total count first for reporting
+        total_count = leads_list.count()
+        print(f"Total leads found: {total_count}")
+        
+        # Convert to JSON - process in batches to avoid memory issues
+        leads = []
+        batch_size = 1000
+        offset = 0
+        
+        while True:
+            batch = leads_list.offset(offset).limit(batch_size).all()
+            if not batch:
+                break
+            
+            for lead in batch:
+                creator_name = lead.creator.name if lead.creator else 'Unknown'
+                
+                # Ensure followup_date is timezone-aware
+                followup_date_iso = None
+                if lead.followup_date:
+                    if lead.followup_date.tzinfo is None:
+                        followup_date_aware = pytz.UTC.localize(lead.followup_date)
+                    else:
+                        followup_date_aware = lead.followup_date
+                    followup_date_iso = followup_date_aware.isoformat()
+                
+                leads.append({
+                    'id': lead.id,
+                    'customer_name': lead.customer_name,
+                    'mobile': lead.mobile,
+                    'car_registration': lead.car_registration or '',
+                    'car_model': lead.car_model or '',
+                    'followup_date': followup_date_iso,
+                    'status': lead.status,
+                    'remarks': lead.remarks or '',
+                    'creator_id': lead.creator_id,
+                    'creator_name': creator_name,
+                    'created_at': lead.created_at.isoformat() if lead.created_at else None,
+                    'modified_at': lead.modified_at.isoformat() if lead.modified_at else None
+                })
+            
+            offset += batch_size
+            print(f"Processed {len(leads)} leads so far...")
+            
+            # Safety check to prevent infinite loops
+            if len(leads) >= total_count:
+                break
+        
+        print(f"Total leads returned: {len(leads)}")
+        
+        return jsonify({'leads': leads, 'total': len(leads)})
+        
+    except Exception as e:
+        print(f"Error in api_admin_leads_manipulation_search: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@application.route('/api/admin/leads-manipulation/bulk-update', methods=['POST'])
+@login_required
+def api_admin_leads_manipulation_bulk_update():
+    """Bulk update leads: change date, transfer user, or both (admin only)"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        lead_ids = data.get('lead_ids', [])
+        operation_type = data.get('operation_type', 'date')  # 'date', 'user', or 'both'
+        new_followup_date = data.get('new_followup_date', '')
+        from_user_id = data.get('from_user_id')
+        to_user_id = data.get('to_user_id')
+        
+        if not lead_ids or len(lead_ids) == 0:
+            return jsonify({'error': 'No leads selected'}), 400
+        
+        # Validate operation type
+        if operation_type not in ['date', 'user', 'both', 'distributed']:
+            return jsonify({'error': 'Invalid operation type'}), 400
+        
+        # Validate date if needed
+        new_followup_datetime = None
+        if operation_type in ['date', 'both']:
+            if not new_followup_date:
+                return jsonify({'error': 'New follow-up date is required'}), 400
+            try:
+                # Parse date string (YYYY-MM-DD format)
+                target_date = datetime.strptime(new_followup_date, '%Y-%m-%d').date()
+                # Create datetime at midnight IST for the selected date, then convert to UTC
+                target_datetime_ist = ist.localize(datetime.combine(target_date, datetime.min.time()))
+                new_followup_datetime = target_datetime_ist.astimezone(pytz.UTC)
+            except ValueError:
+                return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+        
+        # Validate user IDs if needed
+        if operation_type in ['user', 'both']:
+            if not from_user_id or not to_user_id:
+                return jsonify({'error': 'Both from_user_id and to_user_id are required'}), 400
+            try:
+                from_user_id = int(from_user_id)
+                to_user_id = int(to_user_id)
+                if from_user_id == to_user_id:
+                    return jsonify({'error': 'From user and to user cannot be the same'}), 400
+                # Verify users exist
+                from_user = User.query.get(from_user_id)
+                to_user = User.query.get(to_user_id)
+                if not from_user or not to_user:
+                    return jsonify({'error': 'Invalid user ID(s)'}), 400
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Invalid user ID format'}), 400
+        
+        # Handle distributed operation separately
+        if operation_type == 'distributed':
+            dist_start_date = data.get('dist_start_date', '')
+            dist_end_date = data.get('dist_end_date', '')
+            leads_per_day = data.get('leads_per_day')
+            
+            if not dist_start_date or not dist_end_date or not leads_per_day:
+                return jsonify({'error': 'Distribution start date, end date, and leads per day are required'}), 400
+            
+            try:
+                leads_per_day = int(leads_per_day)
+                if leads_per_day <= 0:
+                    return jsonify({'error': 'Leads per day must be a positive number'}), 400
+                
+                start_date = datetime.strptime(dist_start_date, '%Y-%m-%d').date()
+                end_date = datetime.strptime(dist_end_date, '%Y-%m-%d').date()
+                
+                if start_date > end_date:
+                    return jsonify({'error': 'Start date must be before or equal to end date'}), 400
+                
+                # Calculate number of days
+                days_diff = (end_date - start_date).days + 1
+                
+            except ValueError:
+                return jsonify({'error': 'Invalid date format or leads per day. Use YYYY-MM-DD for dates'}), 400
+            
+            # Get leads to update
+            leads = Lead.query.filter(Lead.id.in_(lead_ids)).all()
+            
+            if not leads:
+                return jsonify({'error': 'No leads found with provided IDs'}), 404
+            
+            # Filter leads by from_user_id if specified
+            if from_user_id:
+                try:
+                    from_user_id = int(from_user_id)
+                    leads = [l for l in leads if l.creator_id == from_user_id]
+                except (ValueError, TypeError):
+                    pass
+            
+            # Get target user ID (if specified, otherwise keep original)
+            target_user_id = None
+            if to_user_id:
+                try:
+                    target_user_id = int(to_user_id)
+                    to_user = User.query.get(target_user_id)
+                    if not to_user:
+                        return jsonify({'error': 'Invalid target user ID'}), 400
+                except (ValueError, TypeError):
+                    return jsonify({'error': 'Invalid target user ID format'}), 400
+            
+            # Build date list
+            date_list = []
+            current_date = start_date
+            while current_date <= end_date:
+                date_list.append(current_date)
+                current_date += timedelta(days=1)
+            
+            # Get existing leads count per day per user
+            # This helps us distribute evenly considering existing workload
+            existing_counts = {}
+            for date in date_list:
+                date_start = ist.localize(datetime.combine(date, datetime.min.time()))
+                date_end = date_start + timedelta(days=1)
+                date_start_utc = date_start.astimezone(pytz.UTC)
+                date_end_utc = date_end.astimezone(pytz.UTC)
+                
+                # Count existing leads for each user on this date
+                if target_user_id:
+                    # If transferring to specific user, count only that user's leads
+                    count = Lead.query.filter(
+                        Lead.followup_date >= date_start_utc,
+                        Lead.followup_date < date_end_utc,
+                        Lead.creator_id == target_user_id
+                    ).count()
+                    existing_counts[date] = {target_user_id: count}
+                else:
+                    # Count leads for all users (we'll distribute to original users)
+                    user_counts = db.session.query(
+                        Lead.creator_id,
+                        db.func.count(Lead.id)
+                    ).filter(
+                        Lead.followup_date >= date_start_utc,
+                        Lead.followup_date < date_end_utc
+                    ).group_by(Lead.creator_id).all()
+                    existing_counts[date] = {uid: cnt for uid, cnt in user_counts}
+            
+            # Distribute leads across dates
+            updated_count = 0
+            distribution_summary = {}
+            lead_index = 0
+            
+            # Group leads by user (if not transferring to specific user)
+            if not target_user_id:
+                leads_by_user = {}
+                for lead in leads:
+                    if lead.creator_id not in leads_by_user:
+                        leads_by_user[lead.creator_id] = []
+                    leads_by_user[lead.creator_id].append(lead)
+            else:
+                # All leads go to target user
+                leads_by_user = {target_user_id: leads}
+            
+            # Distribute leads for each user
+            for user_id, user_leads in leads_by_user.items():
+                user_lead_index = 0
+                
+                for date in date_list:
+                    # Get current count for this user on this date
+                    current_count = existing_counts[date].get(user_id, 0)
+                    
+                    # Calculate how many leads we can add to this date
+                    remaining_capacity = max(0, leads_per_day - current_count)
+                    
+                    # Assign leads to this date
+                    leads_to_assign = min(remaining_capacity, len(user_leads) - user_lead_index)
+                    
+                    for i in range(leads_to_assign):
+                        if user_lead_index >= len(user_leads):
+                            break
+                        
+                        lead = user_leads[user_lead_index]
+                        old_followup_date = lead.followup_date
+                        old_creator_id = lead.creator_id
+                        
+                        # Set new followup date
+                        target_datetime_ist = ist.localize(datetime.combine(date, datetime.min.time()))
+                        new_followup_datetime = target_datetime_ist.astimezone(pytz.UTC)
+                        lead.followup_date = new_followup_datetime
+                        
+                        # Update user if specified
+                        if target_user_id and lead.creator_id != target_user_id:
+                            lead.creator_id = target_user_id
+                        
+                        lead.modified_at = datetime.now(ist).astimezone(pytz.UTC)
+                        
+                        # Record worked lead
+                        record_worked_lead(lead.id, lead.creator_id, old_followup_date, new_followup_datetime)
+                        
+                        # Track distribution
+                        date_str = date.strftime('%Y-%m-%d')
+                        if date_str not in distribution_summary:
+                            distribution_summary[date_str] = 0
+                        distribution_summary[date_str] += 1
+                        
+                        updated_count += 1
+                        user_lead_index += 1
+                    
+                    if user_lead_index >= len(user_leads):
+                        break
+                
+                # If there are remaining leads, distribute them evenly across all dates
+                if user_lead_index < len(user_leads):
+                    remaining_leads = user_leads[user_lead_index:]
+                    remaining_dates = date_list
+                    
+                    for idx, lead in enumerate(remaining_leads):
+                        # Cycle through remaining dates
+                        target_date = remaining_dates[idx % len(remaining_dates)]
+                        old_followup_date = lead.followup_date
+                        old_creator_id = lead.creator_id
+                        
+                        target_datetime_ist = ist.localize(datetime.combine(target_date, datetime.min.time()))
+                        new_followup_datetime = target_datetime_ist.astimezone(pytz.UTC)
+                        lead.followup_date = new_followup_datetime
+                        
+                        if target_user_id and lead.creator_id != target_user_id:
+                            lead.creator_id = target_user_id
+                        
+                        lead.modified_at = datetime.now(ist).astimezone(pytz.UTC)
+                        record_worked_lead(lead.id, lead.creator_id, old_followup_date, new_followup_datetime)
+                        
+                        date_str = target_date.strftime('%Y-%m-%d')
+                        if date_str not in distribution_summary:
+                            distribution_summary[date_str] = 0
+                        distribution_summary[date_str] += 1
+                        
+                        updated_count += 1
+            
+            # Commit all changes
+            db.session.commit()
+            
+            # Build detailed summary statistics
+            summary_stats = {
+                'total_leads_selected': len(lead_ids),
+                'total_leads_updated': updated_count,
+                'leads_not_updated': len(lead_ids) - updated_count,
+                'date_range': {
+                    'start': dist_start_date,
+                    'end': dist_end_date,
+                    'days': days_diff
+                },
+                'leads_per_day_limit': leads_per_day,
+                'distribution_by_date': distribution_summary,
+                'distribution_by_user': {}
+            }
+            
+            # Calculate distribution by user if user transfer was involved
+            if target_user_id:
+                summary_stats['user_transfer'] = {
+                    'from_user_id': from_user_id if from_user_id else 'All Users',
+                    'to_user_id': target_user_id,
+                    'to_user_name': to_user.name if to_user else 'Unknown'
+                }
+            
+            # Calculate average leads per day
+            if distribution_summary:
+                total_distributed = sum(distribution_summary.values())
+                summary_stats['average_leads_per_day'] = round(total_distributed / len(distribution_summary), 2)
+                summary_stats['max_leads_in_day'] = max(distribution_summary.values())
+                summary_stats['min_leads_in_day'] = min(distribution_summary.values())
+            
+            # Format distribution summary text
+            summary_text = ", ".join([f"{date}: {count}" for date, count in sorted(distribution_summary.items())])
+            
+            return jsonify({
+                'success': True,
+                'message': f'Successfully distributed {updated_count} lead(s)',
+                'updated_count': updated_count,
+                'total_selected': len(lead_ids),
+                'distribution_summary': summary_text,
+                'detailed_stats': summary_stats
+            })
+        
+        # Get leads to update (for non-distributed operations)
+        leads = Lead.query.filter(Lead.id.in_(lead_ids)).all()
+        
+        if not leads:
+            return jsonify({'error': 'No leads found with provided IDs'}), 404
+        
+        updated_count = 0
+        
+        # Perform bulk updates
+        for lead in leads:
+            updated = False
+            old_followup_date = lead.followup_date
+            old_creator_id = lead.creator_id
+            
+            # Update date if needed
+            if operation_type in ['date', 'both']:
+                lead.followup_date = new_followup_datetime
+                updated = True
+            
+            # Update user if needed
+            if operation_type in ['user', 'both']:
+                # Only update if the lead is currently assigned to from_user_id
+                if lead.creator_id == from_user_id:
+                    lead.creator_id = to_user_id
+                    updated = True
+                # If operation is 'user' only and lead doesn't match from_user_id, skip it
+                elif operation_type == 'user':
+                    continue
+            
+            if updated:
+                lead.modified_at = datetime.now(ist).astimezone(pytz.UTC)
+                
+                # Record worked lead if date changed (use new creator_id if user was changed)
+                if operation_type in ['date', 'both'] and old_followup_date != new_followup_datetime:
+                    record_worked_lead(lead.id, lead.creator_id, old_followup_date, new_followup_datetime)
+                
+                updated_count += 1
+        
+        # Commit all changes
+        db.session.commit()
+        
+        # Build detailed summary statistics for non-distributed operations
+        summary_stats = {
+            'total_leads_selected': len(lead_ids),
+            'total_leads_updated': updated_count,
+            'leads_not_updated': len(lead_ids) - updated_count,
+            'operation_type': operation_type
+        }
+        
+        if operation_type in ['date', 'both']:
+            summary_stats['new_followup_date'] = new_followup_date
+        
+        if operation_type in ['user', 'both']:
+            from_user = User.query.get(from_user_id) if from_user_id else None
+            to_user = User.query.get(to_user_id) if to_user_id else None
+            summary_stats['user_transfer'] = {
+                'from_user_id': from_user_id,
+                'from_user_name': from_user.name if from_user else 'Unknown',
+                'to_user_id': to_user_id,
+                'to_user_name': to_user.name if to_user else 'Unknown'
+            }
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully updated {updated_count} lead(s)',
+            'updated_count': updated_count,
+            'total_selected': len(lead_ids),
+            'detailed_stats': summary_stats
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error in api_admin_leads_manipulation_bulk_update: {e}")
+        return jsonify({'error': f'Failed to update leads: {str(e)}'}), 500
+
 @application.route('/admin_leads', methods=['GET', 'POST'])
 @login_required
 def admin_leads():
