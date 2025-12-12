@@ -8,9 +8,9 @@ import { fetchQueue, fetchTeamMembers, fetchCurrentUser } from "../../lib/api";
 import type { QueueItem } from "../../lib/types";
 import { getTodayIST, formatDateIST, formatDateTimeIST } from "../../lib/dateUtils";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-  "http://localhost:5000";
+import { getApiBase } from "../../lib/apiBase";
+
+const API_BASE = getApiBase();
 
 interface DashboardMetrics {
   todays_followups: number;
@@ -80,7 +80,7 @@ export default function DashboardPage() {
         if (user.is_admin) {
           try {
             const teamData = await fetchTeamMembers();
-            setTeamMembers(teamData.members || []);
+            setTeamMembers((teamData.members || []).map(m => ({ id: m.id, name: m.name, username: m.name })));
           } catch (err) {
             console.error("Failed to load team members:", err);
           }

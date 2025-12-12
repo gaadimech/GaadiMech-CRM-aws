@@ -8,9 +8,9 @@ import { fetchFollowups, fetchTeamMembers, fetchCurrentUser } from "../../lib/ap
 import { getTodayIST, formatDateIST, formatDateTimeIST } from "../../lib/dateUtils";
 import type { Lead, LeadStatus } from "../../lib/types";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-  "http://localhost:5000";
+import { getApiBase } from "../../lib/apiBase";
+
+const API_BASE = getApiBase();
 
 const STATUS_OPTIONS: LeadStatus[] = [
   "All Status",

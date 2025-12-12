@@ -5,9 +5,9 @@ import type { LeadStatus } from "../lib/types";
 import { getTodayIST } from "../lib/dateUtils";
 import VoiceInputButton from "./VoiceInputButton";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-  "http://localhost:5000";
+import { getApiBase } from "../lib/apiBase";
+
+const API_BASE = getApiBase();
 
 const STATUS_OPTIONS: LeadStatus[] = [
   "New Lead",

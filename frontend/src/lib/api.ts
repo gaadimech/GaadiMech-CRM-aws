@@ -6,9 +6,9 @@ import {
   WhatsAppSendRequest,
 } from "./types";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-  "http://localhost:5000";
+import { getApiBase } from "./apiBase";
+
+const API_BASE = getApiBase();
 
 async function apiFetch<T>(
   path: string,
@@ -128,6 +128,7 @@ export async function fetchFollowups(params: {
     leads: Lead[];
     total_pages: number;
     current_page: number;
+    total: number;
   }>(`/api/followups?${search.toString()}`);
 }
 
@@ -174,11 +175,13 @@ export async function fetchCurrentUser() {
 }
 
 export async function logout() {
-  const API_BASE =
+  const API_BASE_LOGOUT =
     process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-    "http://localhost:5000";
+    (typeof window !== "undefined" && window.location.origin === "http://localhost:3000" 
+      ? "http://localhost:5000" 
+      : ""); // Empty string means relative paths (same origin)
   
-  await fetch(`${API_BASE}/logout`, {
+  await fetch(`${API_BASE_LOGOUT}/logout`, {
     method: "GET",
     credentials: "include",
   });

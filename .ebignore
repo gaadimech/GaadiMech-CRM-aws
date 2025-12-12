@@ -18,3 +18,14 @@ test_*/
 *test_*.py
 # Exclude documentation
 docs/ 
+# Exclude frontend node_modules (will be installed during build)
+frontend/node_modules/
+frontend/.next/
+# But include frontend source files
+!frontend/src/
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/next.config.ts
+!frontend/tsconfig.json
+!frontend/postcss.config.mjs
+!frontend/eslint.config.mjs 

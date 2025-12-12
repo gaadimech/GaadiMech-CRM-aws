@@ -1,211 +1,117 @@
-# GaadiMech CRM Portal
+# GaadiMech CRM
 
-A comprehensive Customer Relationship Management (CRM) system built with Flask for tracking telecaller performance and lead management.
+Customer Relationship Management system for GaadiMech.
 
-## Features
+## Project Structure
 
-### 🎯 Dashboard Analytics
-- **Today's Followups**: View and manage all scheduled followups for the current date
-- **Performance Metrics**: Track daily, weekly, and monthly lead creation statistics
-- **User Performance Ranking**: Leaderboard showing team member performance
-- **Lead Status Breakdown**: Visual charts showing status distribution
-- **Advanced Analytics**: Peak hours analysis, conversion rates, and efficiency metrics
+This project is split into two independent applications:
 
-### 📊 Key Dashboard Components
-
-#### 1. Today's Followups Section
-- Default view shows today's followups for all users
-- Filter by specific telecaller using dropdown
-- Display customer name, mobile, followup time, status, and remarks
-- Click-to-call functionality for mobile numbers
-- Quick action buttons: Confirm, Reschedule, Mark as No Answer
-- WhatsApp integration for direct messaging
-
-#### 2. Performance Metrics Cards
-- Today's followups count
-- Leads created today
-- Monthly leads total
-- Follow-up efficiency percentage
-
-#### 3. Interactive Charts
-- **Status Pie Chart**: Visual breakdown of lead statuses
-- **7-Day Trend**: Line chart showing lead creation over the past week
-- **Hourly Analysis**: Bar chart showing peak performance hours
-
-#### 4. Team Performance
-- Ranked list of team members by leads created
-- Shows followups due, confirmed leads, and completed leads
-- Real-time performance tracking
-
-#### 5. Advanced Analytics
-- Peak performance hours identification
-- Status conversion rates with progress bars
-- Quick stats overview
-- Export functionality for reports
-
-### 🔧 Technical Features
-- **Real-time Updates**: Dashboard auto-refreshes every 5 minutes
-- **Mobile Responsive**: Works on desktop, tablet, and mobile devices
-- **Role-based Access**: Different views for admins vs regular users
-- **Date Range Filtering**: View data for any specific date
-- **Export Functionality**: Generate CSV reports
-- **Interactive Elements**: Hover effects, tooltips, and smooth animations
-
-## Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd crm-portal
+```
+GaadiMech-CRM-aws/
+├── backend/          # Flask/Python backend API
+├── frontend/         # Next.js frontend application
+└── README.md         # This file
 ```
 
-2. Create a virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+## Quick Start
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+### Backend Setup
 
-4. Set up environment variables:
-```bash
-# Create a .env file with:
-SECRET_KEY=your_secret_key_here
-DATABASE_URL=your_aws_rds_database_url
-```
+1. Navigate to backend directory:
+   ```bash
+   cd backend
+   ```
 
-5. Initialize the database:
-```bash
-flask db upgrade
-```
+2. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-6. Run the application:
-```bash
-python app.py
-```
+3. Configure environment variables (create `.env` file):
+   ```
+   RDS_HOST=crm-portal-db.cnewyw0y0leb.ap-south-1.rds.amazonaws.com
+   RDS_DB=crmportal
+   RDS_USER=crmadmin
+   RDS_PASSWORD=GaadiMech2024!
+   RDS_PORT=5432
+   SECRET_KEY=GaadiMech-Super-Secret-Key-Change-This-2024
+   FLASK_ENV=development
+   PORT=5000
+   ```
 
-## Database Schema
+4. Run database migrations:
+   ```bash
+   flask db upgrade
+   ```
 
-### User Table
-- `id`: Primary key
-- `username`: Unique username
-- `password_hash`: Hashed password
-- `name`: Display name
-- `is_admin`: Boolean for admin privileges
+5. Start the backend server:
+   ```bash
+   python run_local.py
+   ```
 
-### Lead Table
-- `id`: Primary key
-- `customer_name`: Customer's name
-- `mobile`: Phone number (10-12 digits)
-- `car_registration`: Vehicle registration (optional)
-- `followup_date`: Scheduled followup datetime
-- `remarks`: Notes and comments
-- `status`: Lead status (Did Not Pick Up, Needs Followup, Confirmed, Open, Completed, Feedback)
-- `created_at`: Creation timestamp
-- `modified_at`: Last modification timestamp
-- `creator_id`: Foreign key to User table
+   Backend will run on `http://localhost:5000`
 
-## Usage
+### Frontend Setup
 
-### Dashboard Navigation
-1. **Login** with your credentials
-2. **Dashboard**: Main analytics view (new feature)
-3. **Add Lead**: Create new leads
-4. **View Followups**: Search and manage existing leads
+1. Navigate to frontend directory:
+   ```bash
+   cd frontend
+   ```
 
-### Dashboard Features
+2. Install Node.js dependencies:
+   ```bash
+   npm install
+   ```
 
-#### Viewing Today's Followups
-- Dashboard loads with today's followups by default
-- Use the date picker to view followups for other dates
-- Admin users can filter by team member using the dropdown
+3. Configure environment variables (create `.env.local` file):
+   ```
+   NEXT_PUBLIC_API_BASE_URL=http://localhost:5000
+   ```
 
-#### Quick Actions
-- **Copy Phone Number**: Click on any phone number to copy to clipboard
-- **WhatsApp Integration**: Click WhatsApp button to open chat
-- **Status Updates**: Use quick action buttons to update lead status
-- **Reschedule Followups**: Click reschedule to set new followup date
+4. Start the frontend development server:
+   ```bash
+   npm run dev
+   ```
 
-#### Performance Tracking
-- View team rankings and individual performance
-- Track conversion rates and efficiency metrics
-- Analyze peak performance hours
-- Export data for external reporting
+   Frontend will run on `http://localhost:3000`
 
-#### Filtering Options
-- **Date Filter**: Select any date to view historical data
-- **User Filter**: (Admin only) Filter by specific team member
-- **Real-time Refresh**: Click refresh button or wait for auto-refresh
+## Testing
 
-### User Roles
+1. **Test Backend Independently:**
+   - Start only the backend server
+   - Test API endpoints using curl or Postman:
+     ```bash
+     curl http://localhost:5000/api/user/current
+     ```
 
-#### Admin Users
-- View all team members' data
-- Filter dashboard by specific users
-- Access to modified date tracking
-- Full lead management capabilities
+2. **Test Frontend Independently:**
+   - Start only the frontend server
+   - Navigate to `http://localhost:3000`
+   - Frontend should load (but API calls will fail if backend is not running)
 
-#### Regular Users
-- View only their own leads and followups
-- Personal performance metrics
-- Standard lead management features
+3. **Test Both Together:**
+   - Start both backend and frontend servers
+   - Navigate to `http://localhost:3000`
+   - Login and verify all features work correctly
 
-## API Endpoints
+## Development Workflow
 
-### Dashboard APIs
-- `GET /dashboard`: Main dashboard view
-- `POST /api/dashboard/status-update`: Update lead status
-- `POST /api/dashboard/quick-followup`: Schedule new followup
+1. Start backend server in one terminal:
+   ```bash
+   cd backend && python run_local.py
+   ```
 
-### Existing APIs
-- `GET /`: Add lead page
-- `POST /add_lead`: Create new lead
-- `GET /followups`: View and search leads
-- `GET|POST /edit_lead/<id>`: Edit lead details
-- `POST /delete_lead/<id>`: Delete lead
+2. Start frontend server in another terminal:
+   ```bash
+   cd frontend && npm run dev
+   ```
 
-## Browser Compatibility
-- Chrome 70+
-- Firefox 65+
-- Safari 12+
-- Edge 79+
+3. Access the application at `http://localhost:3000`
 
-## Mobile Support
-- Responsive design works on all screen sizes
-- Touch-friendly interface
-- Optimized charts for mobile viewing
+## Deployment
 
-## Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+For deployment, each application can be deployed separately:
+- Backend: Deploy to AWS Elastic Beanstalk, Heroku, or similar
+- Frontend: Deploy to Vercel, Netlify, or serve as static files
 
-## Security Features
-- Session management with Flask-Login
-- Rate limiting on sensitive endpoints
-- CSRF protection
-- Secure password hashing
-- Role-based access control
-
-## Performance Optimizations
-- Efficient database queries with proper indexing
-- Lazy loading for large datasets
-- Client-side caching
-- Optimized chart rendering
-- Auto-refresh only when page is visible
-
-## Troubleshooting
-
-### Common Issues
-1. **Dashboard not loading**: Check database connection and ensure migrations are applied
-2. **Charts not displaying**: Verify Chart.js is loading correctly
-3. **WhatsApp integration not working**: Check user agent detection
-4. **Performance issues**: Review database indexes and query optimization
-
-### Support
-For issues or questions, please check the application logs and ensure all dependencies are properly installed. 
+See individual README files in `backend/` and `frontend/` directories for more details.

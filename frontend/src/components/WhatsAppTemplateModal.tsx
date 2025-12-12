@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-  "http://localhost:5000";
+import { getApiBase } from "../lib/apiBase";
+
+const API_BASE = getApiBase();
 
 interface WhatsAppTemplate {
   id: number;

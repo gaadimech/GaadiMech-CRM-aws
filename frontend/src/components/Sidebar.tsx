@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-  "http://localhost:5000";
+import { getApiBase } from "../lib/apiBase";
+
+const API_BASE = getApiBase();
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
@@ -37,11 +37,16 @@ export default function Sidebar() {
         });
         if (res.ok) {
           const data = await res.json();
-          setIsAdmin(data.is_admin || false);
+          console.log("[Sidebar] User data from API:", data);
+          console.log("[Sidebar] is_admin value:", data.is_admin, "Type:", typeof data.is_admin);
+          setIsAdmin(data.is_admin === true || data.is_admin === "true" || data.is_admin === 1);
           setUserName(data.name || data.username || "User");
+          console.log("[Sidebar] isAdmin state set to:", data.is_admin === true || data.is_admin === "true" || data.is_admin === 1);
+        } else {
+          console.error("[Sidebar] Failed to get user data:", res.status, await res.text());
         }
       } catch (err) {
-        // Silent fail
+        console.error("[Sidebar] Error checking user:", err);
       }
     }
     checkUser();
@@ -49,10 +54,6 @@ export default function Sidebar() {
 
   async function handleLogout() {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-        "http://localhost:5000";
-      
       await fetch(`${API_BASE}/logout`, {
         method: "GET",
         credentials: "include",

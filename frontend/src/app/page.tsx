@@ -7,12 +7,16 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    router.push("/dashboard");
+    // Redirect to login first, ProtectedRoute will handle dashboard redirect after auth
+    router.replace("/login");
   }, [router]);
 
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
-      <p className="text-zinc-600">Redirecting to dashboard...</p>
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900 mx-auto"></div>
+        <p className="mt-4 text-zinc-600">Redirecting...</p>
+      </div>
     </div>
   );
 }

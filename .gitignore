@@ -108,11 +108,25 @@ deployment_fixed_password/
 awscliv2.zip
 aws/
 
-# Documentation (keep only main README)
+# Documentation (keep only main README and essential docs)
 docs/
 *.md
 !README.md
 !frontend/README.md
+!backend/README.md
+!TESTING.md
+!SEPARATION_SUMMARY.md
+!ADMIN_ROLE_FIX.md
+!CLEANUP_ANALYSIS.md
+
+# Old deployment folder (replaced by backend/)
+deployment/
+
+# Old root static folder (now in backend/static/)
+static/
+
+# Backend build artifacts (frontend build output)
+backend/static/frontend/
 
 # Node modules (handled by frontend/.gitignore)
 node_modules/

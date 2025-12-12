@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-  "http://localhost:5000";
+import { getApiBase } from "../../lib/apiBase";
+
+const API_BASE = getApiBase();
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,6 +13,47 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Check if user is already authenticated
+  useEffect(() => {
+    async function checkIfAuthenticated() {
+      try {
+        const res = await fetch(`${API_BASE}/api/user/current`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          // Already logged in, redirect to dashboard
+          router.replace("/dashboard");
+        } else if (res.status === 500 || res.status === 503) {
+          // Server/Database error - show login form with warning
+          console.error(`Server error (${res.status}) - database may be unavailable`);
+          setError("Server connection issues. Login may not work.");
+          setCheckingAuth(false);
+        } else {
+          // Not authenticated (401) - show login form
+          setCheckingAuth(false);
+        }
+      } catch (err) {
+        console.error("Auth check failed:", err);
+        // Network error - show login form with warning
+        setError("Unable to connect to server. Please check your connection.");
+        setCheckingAuth(false);
+      }
+    }
+    checkIfAuthenticated();
+  }, [router]);
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900 mx-auto"></div>
+          <p className="mt-4 text-zinc-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,9 +86,22 @@ export default function LoginPage() {
       }
 
       if (res.ok && data?.success) {
-        // Login successful
-        router.push("/dashboard");
-        router.refresh();
+        // Login successful - verify cookie is set before redirecting
+        // This prevents redirect loop where ProtectedRoute checks auth before cookie is set
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Double-check authentication before redirecting
+        const verifyRes = await fetch(`${API_BASE}/api/user/current`, {
+          credentials: "include",
+        });
+        
+        if (verifyRes.ok) {
+          router.replace("/dashboard");
+        } else {
+          // Cookie not set yet, wait a bit more
+          await new Promise(resolve => setTimeout(resolve, 300));
+          router.replace("/dashboard");
+        }
       } else if (res.status === 401 || (data && !data.success)) {
         // Invalid credentials
         setError(data?.message || "Invalid username or password");
@@ -58,8 +112,7 @@ export default function LoginPage() {
           credentials: "include",
         });
         if (checkRes.ok) {
-          router.push("/dashboard");
-          router.refresh();
+          router.replace("/dashboard");
         } else {
           setError("Login failed. Please try again.");
         }
